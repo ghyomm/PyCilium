@@ -6,7 +6,7 @@ Python functions to analyze the length of cilia in confocal stacks. Several cili
     DATA_CILIA (equivalent to workspace3/POC5_project/osteoblast)
     |-- 20200121 (date)
     |   |-- Project1
-    |       |-- Project.lif (lif file saved by Leica software)
+    |       |-- Project1.lif (lif file saved by Leica software)
     |       |-- S01_OB002_P2_B1_X65_FOP-647_Poc5-488_GT335-555
     |       |-- [...] One folder per series (= one stack)
     |       |-- S05_OB004_P2_B2_X63_Z1.68_FOP-647_Poc5-488_GT335-555
