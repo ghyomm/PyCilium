@@ -12,6 +12,7 @@ from bioformats import log4j
 bf.javabridge.start_vm(class_path=bf.JARS,run_headless=True)
 log4j = javabridge.JClassWrapper("loci.common.Log4jTools")
 log4j.setRootLevel("OFF")  # Turn off debug messages
+# Think about using javabridge.kill_vm() when program if closed
 
 class LifFile:
     '''Custom class to handle data path and file name'''

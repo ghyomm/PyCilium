@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+#-*- coding: utf-8 -*-
 
 '''
 First tried Using read_lif to access .lif files: https://pypi.org/project/read-lif/
@@ -21,7 +23,11 @@ DATA_CILIA (equivalent to workspace3/POC5_project/osteoblast)
     |-- [...]
 '''
 
-import sys, lif
+import os, sys, lif, re
+import numpy as np
+import utilities as utils
+from tkinter import filedialog
+from tkinter import *
 
 # import cv2, time, roi, os, sys, pickle
 # import numpy as np
@@ -30,16 +36,19 @@ import sys, lif
 # import utilities as utils  # Custom functions
 
 if __name__ == '__main__':
-    if(len(sys.argv)==3):
-        # lif = LifFile('C:/Users/Nolwenn/Documents/DATA_CILIA',sys.argv[1],sys.argv[2])
-        lif = lif.LifFile('/home/ghyomm/DATA_CILIA',sys.argv[1],sys.argv[2])
-        # lif = lif.LifFile('/home/ghyomm/DATA_CILIA','20200121','Project1.lif')
-        print('This is PyCilium v0.1.')
-        lif.get_metadata(save=True)  # Puts metadata in lif.md
-        lif.get_proj()
-        sys.exit('Done. Quit with Ctrl+C.')
+    root = Tk().withdraw()  # we don't want a full GUI, so keep the root window from appearing
+    filename =  filedialog.askopenfilename(initialdir = "/home/ghyomm/DATA_CILIA",
+        title = "Select .lif file",filetypes = (("lif files","*.lif"),("all files","*.*")))
+    path_comp = utils.splitall(filename)  # Get all components of path
+    p = re.compile('^20[0-9]{6}$')  # regex for date format yyyymmdd
+    res = np.where([bool(p.match(x)) for x in path_comp])[0]  # Which path component matches regex
+    if(len(res)==1):
+        date = path_comp[int(res)]  # Get date from folder name
     else:
-        sys.exit('Wrong number of arguments.\nYou must pass DATE and FILE_NAME as arguments.\nQuit with Ctrl+C.')
+        sys.exit('Several folders in path match date format yyyymmdd.')
+    lif = lif.LifFile('/home/ghyomm/DATA_CILIA',date,path_comp[-1])
+    lif.get_metadata(save=True)  # Puts metadata in lif.md
+    lif.get_proj()
 
     # # Analyze one series
     # selected_series = reader.chooseSerieIndex() # Let user chose the series
