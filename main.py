@@ -23,32 +23,33 @@ DATA_CILIA (equivalent to workspace3/POC5_project/osteoblast)
     |-- [...]
 '''
 
-import os, sys, lif, re
-import numpy as np
-import utilities as utils
-from tkinter import filedialog
-from tkinter import *
-
+# import os, sys, lif, re, GUI
+# import numpy as np
+# import utilities as utils
 # import cv2, time, roi, os, sys, pickle
 # import numpy as np
 # import pandas as pd
 # from datetime import date
 # import utilities as utils  # Custom functions
 
+import GUI
+
 if __name__ == '__main__':
-    root = Tk().withdraw()  # we don't want a full GUI, so keep the root window from appearing
-    filename =  filedialog.askopenfilename(initialdir = "/home/ghyomm/DATA_CILIA",
-        title = "Select .lif file",filetypes = (("lif files","*.lif"),("all files","*.*")))
-    path_comp = utils.splitall(filename)  # Get all components of path
-    p = re.compile('^20[0-9]{6}$')  # regex for date format yyyymmdd
-    res = np.where([bool(p.match(x)) for x in path_comp])[0]  # Which path component matches regex
-    if(len(res)==1):
-        date = path_comp[int(res)]  # Get date from folder name
-    else:
-        sys.exit('Several folders in path match date format yyyymmdd.')
-    lif = lif.LifFile('/home/ghyomm/DATA_CILIA',date,path_comp[-1])
-    lif.get_metadata(save=True)  # Puts metadata in lif.md
-    lif.get_proj()
+
+    import GUI
+    root = GUI.Root()  # Use class Root defined in GUI/TkDialog
+    root.mainloop()  # Run Tk interface
+    '''
+    Below useful variables in root:
+    root.fullpath = path to lif file
+    root.series_indx = index of selected series
+    root.series_name = name of selected series
+    root.selected_chans = indices of selected channels
+    root.contains_cilia = index of channel containing cilia
+    '''
+    
+
+
 
     # # Analyze one series
     # selected_series = reader.chooseSerieIndex() # Let user chose the series
