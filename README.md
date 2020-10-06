@@ -63,5 +63,9 @@ root contains useful variables:
 `root.series_name` = name of selected series  
 `root.selected_chans` = indices of selected channels  
 `root.contains_cilia` = index of channel containing cilia
+
 Below: screenshot of the Tkinter interface for selecting the lif file, selecting the series and channels. For each channel, a slide bar enables pixel saturation adjustment and a checkbox is used to indicate which channel contains cilia (on which length measurements will be performed). Only one checkbox can be selected.
 <img src="https://github.com/ghyomm/PyCilium/blob/master/pics/tk_GUI.png" width="60%">
+
+This procedures creates a bunch of files and folders in the original directory containing the lif file, see directory before and after:
+<img src="https://github.com/ghyomm/PyCilium/blob/master/pics/data_folder.png" width="60%">
