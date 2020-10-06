@@ -68,5 +68,19 @@ Below: screenshot of the Tkinter interface for selecting the lif file, selecting
 
 <img src="https://github.com/ghyomm/PyCilium/blob/master/pics/tk_GUI.png" width="60%">
 
-This procedures creates a bunch of files and folders in the original directory containing the lif file, see directory before and after:
+This procedures creates a bunch of files (metadata) and folders (one per series, with z projection images inside) in the original directory containing the lif file, see directory before and after:
 <img src="https://github.com/ghyomm/PyCilium/blob/master/pics/data_folder.jpg" width="60%">
+
+`root.md` contains the metadata extracted from the lif file (saved as csv and pickle files).
+
+```
+	ID	Name	Nchan	SizeX	PhysicalSizeX	PhysicalSizeXUnit	SizeY	PhysicalSizeY	PhysicalSizeYUnit	SizeZ	PhysicalSizeZ	PhysicalSizeZUnit	PixelType
+0	Image:0	OB002_P2_B1_X65_FOP-647_Poc5-488_GT335-555	3	1024	0.180375	µm	1024	0.180375	µm	13	0.500203	µm	uint8
+1	Image:1	OB002_P2_B1_X40_FOP-647_Poc5-488_GT335-555	3	1024	0.284091	µm	1024	0.284091	µm	10	0.800134	µm	uint8
+2	Image:2	OB004_P2_B2_X40_FOP-647_Poc5-488_GT335-555	3	512	0.568738	µm	512	0.568738	µm	13	0.500203	µm	uint8
+3	Image:3	OB004_P2_B2_X40_FOP-647_Poc5-488_GT335-555_1	3	1024	0.284553	µm	1024	0.284553	µm	11	0.800133	µm	uint8
+4	Image:4	OB004_P2_B2_X63_Z1.68_FOP-647_Poc5-488_GT335-555	3	1024	0.107079	µm	1024	0.107079	µm	11	0.500203	µm	uint8
+5	Image:5	OB004_P3_B2_X63_Z1.68_alphatub-647_Poc5-488_Fo...	3	1024	0.107428	µm	1024	0.107428	µm	16	0.199795	µm	uint8
+6	Image:6	OB004_P3_B2_X63_Z1.68_alphatub-647_Poc5-488_Fo...	3	1024	0.107602	µm	1024	0.107602	µm	12	0.500203	µm	uint8
+7	Image:7	OB004_P3_B2_X63_alphatub-647_Poc5-488_Fop-555	3	1024	0.179793	µm	1024	0.179793	µm	15	0.500203	µm	uint8
+```
