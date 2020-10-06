@@ -107,3 +107,12 @@ The projection image is obtained as follows:
 proj = np.amax(stack[:,:,:,root.contains_cilia],0)
 ```
 
+The next step is to display the projection image using OpenCV and use mouse events to draw a ROI:
+
+```python
+import roi
+my_roi = roi.RoiCilium(proj,'Set threshold and draw bounding polygon')  # Initialize class RoiCilium
+my_roi.contour.draw_contour()
+```
+
+
