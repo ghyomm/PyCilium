@@ -44,7 +44,22 @@ Then in the virtual environment, `pip3 install` the following packages: `opencv-
         |-- Project3
             |-- [...]
 
+## Nomenclature
+The **date** is the image acquisition date. A **project** file is the bundle file saved by the Leica software (extension: .lif). Several projects can be saved for one date. A project is subdivided in **series** which are basically different stacks. One series contains usually several **channels**.
+
 ## Steps of the analysis
 
-1. Open .lif file (Leica) from folder. If a previous analysis was run, files related to existing ROIs (e.g. ROI01, ROI02, etc) are detected and new ROIs will are saved with proper name (e.g. ROI3, ROI4, etc).
-2. The user sets an appropriate threshold around a selected cilium, such that only a few pixels in the cilium are saturated. He/she then draws a bounding polygon around the cilium.
+### Loading data from lif file, parsing metadata, selecting channels based on projections
+This is all done by:
+```python
+import GUI
+root = GUI.Root()  # Use class Root defined in GUI/TkDialog
+root.mainloop()  # Run Tk interface
+```
+root contains useful variables:  
+`root.fullpath` = path to lif file  
+`root.md` = metadata of lif file  
+`root.series_indx` = index of selected series  
+`root.series_name` = name of selected series  
+`root.selected_chans` = indices of selected channels  
+`root.contains_cilia` = index of channel containing cilia
