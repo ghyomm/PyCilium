@@ -1,19 +1,38 @@
 # PyCilium
-Python functions to analyze the length of cilia in confocal stacks. Several cilia can be analyzed in the same stack. Length is calculated in 3D.
+Python functions to analyze the length of cilia in confocal stacks.
 
-## Data files organizarion
+## Rationale
+The idea is to provide a comfortable user interface for annotating z projection images and measure the length of cilia. ROI-related information should be saved in text files.
+
+## Prerequisites
+
+## Data organizarion
 
     DATA_CILIA (equivalent to workspace3/POC5_project/osteoblast)
     |-- 20200121 (date)
-    |   |-- Project1
-    |       |-- Project1.lif (lif file saved by Leica software)
-    |       |-- S01_OB002_P2_B1_X65_FOP-647_Poc5-488_GT335-555
-    |       |-- [...] One folder per series (= one stack)
-    |       |-- S05_OB004_P2_B2_X63_Z1.68_FOP-647_Poc5-488_GT335-555
+    |   |
+    |   |-- Project1 (or any other projet name)
+    |   |   |
+    |   |   |-- Project1.lif (lif file saved by Leica software)
+    |   |   |-- parsed_metadata.csv
+    |   |   |-- parsed_metadata.pickle
+    |   |   |-- S01_OB002_P2_B1_X65_FOP-647_Poc5-488_GT335-555 (series folder created by PyCilium)
+    |   |   |   |-- z_proj_chan1.png (z projection created by PyCilium)
+    |   |   |   |-- z_proj_chan2.png
+    |   |   |   |-- z_proj_chan3.png
+    |   |   |-- [...] other series
+    |   |
     |   |-- Project2
+    |       |
+    |       |-- Project2.lif
+    |       |-- parsed_metadata.csv
+    |       |-- parsed_metadata.pickle
     |       |-- [...]
-    |-- 20200123 (other date)
-        |-- [...]
+    |
+    |-- 20200123 (another date)
+        |
+        |-- Project3
+            |-- [...]
 
 ## Steps of the analysis
 
