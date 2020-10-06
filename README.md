@@ -6,6 +6,16 @@ The idea is to provide a comfortable user interface for annotating z projection 
 
 ## Prerequisites
 
+```
+sudo apt-get install python3-tk
+```
+Might be a good idea to work in a virtual environment. Create one for PyCilium:
+```
+$ python3 -m venv pcl
+$ source pcl/bin/activate
+```
+Then in the virtual environment, `pip3 install` the following packages: `opencv-python`, `wheel`, `jupyter`, `python-bioformats`, `pickle-mixin`, `numpy`, `pandas`, `Pillow` and `python-resize-image`.
+
 ## Data organizarion
 
     DATA_CILIA (equivalent to workspace3/POC5_project/osteoblast)
