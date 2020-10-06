@@ -6,16 +6,6 @@ But realized that the metadata obtained with read_lif is crap (wrong X,Y,Z pixel
 Then tried bioformats: https://pypi.org/project/python-bioformats/
 Bioformats gives same pixelsize values as when loaded with Fiji, which is reassuring.
 '''
-# import os, sys, lif, re, GUI
-# import numpy as np
-# import utilities as utils
-# import cv2, time, roi, os, sys, pickle
-# import numpy as np
-# import pandas as pd
-# from datetime import date
-# import utilities as utils  # Custom functions
-
-import GUI
 
 if __name__ == '__main__':
 
@@ -31,22 +21,8 @@ if __name__ == '__main__':
     root.selected_chans = indices of selected channels
     root.contains_cilia = index of channel containing cilia
     '''
-    import bioformats as bf
-    import numpy as np
-    import utilities as utils
-    rdr = bf.ImageReader(root.fullpath)
-    # Obtain hyperstack
-    stack = []
-    for z in range(root.md.SizeZ[root.series_indx]):  # Loop through z slices
-        im = rdr.read(z=z, series=root.series_indx, rescale=False)
-        stack.append(im)
-    stack = np.array(stack)
-    # Compute z projection for channel containing cilia
-    proj = np.amax(stack[:,:,:,root.contains_cilia],0)
-    # utils.myimshow(proj)
-    import roi
-    my_roi = roi.RoiCilium(proj,'Set threshold and draw bounding polygon')  # Initialize class RoiCilium
-    my_roi.contour.draw_contour()
+
+    # OLD CODE (KEPT JUST IN CASE)
     # #
     # # Grab mask using contours defined by user
     # mask = np.broadcast_to(my_roi.contour.immask == 0, stack.shape)

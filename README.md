@@ -115,4 +115,6 @@ my_roi = roi.RoiCilium(proj,'Set threshold and draw bounding polygon')  # Initia
 my_roi.contour.draw_contour()
 ```
 
+The image below shows a cilium with the saturation level adjusted by the user (using a slide bar at the bottom of the window, not visible here; blue pixels are saturated). The green polygon was drawn by the user (right click to draw a point). The point surrounded by a light blue circle is the one which will be removed if the user does a wheel click. Use the key "q" to quit.
 
+<img src="https://github.com/ghyomm/PyCilium/blob/master/pics/cilium.png" width="100%">
