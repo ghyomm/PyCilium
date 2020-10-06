@@ -49,7 +49,7 @@ The **date** is the image acquisition date. A **project** file is the bundle fil
 
 ## Steps of the analysis
 
-### Loading data from lif file, parsing metadata, selecting channels based on projections
+### Step 1: loading data from lif file, parsing metadata, selecting channels based on projections
 This is all done by:
 ```python
 import GUI
@@ -85,3 +85,5 @@ This procedures creates a bunch of files (metadata) and folders (one per series,
 6	Image:6	OB004_P3_B2_X63_Z1.68_alphatub-647_Poc5-488_Fo...	3	1024	0.107602	µm	1024	0.107602	µm	12	0.500203	µm	uint8
 7	Image:7	OB004_P3_B2_X63_alphatub-647_Poc5-488_Fop-555	3	1024	0.179793	µm	1024	0.179793	µm	15	0.500203	µm	uint8
 ```
+
+### Step 2: working with projections images and OpenCV for drawing ROIs interactively.
