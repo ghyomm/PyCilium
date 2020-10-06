@@ -87,3 +87,23 @@ This procedures creates a bunch of files (metadata) and folders (one per series,
 ```
 
 ### Step 2: working with projections images and OpenCV for drawing ROIs interactively.
+We now have all the info to start working on z projection images. The code below shows how to obtain the hyperstack of a series (a 4-dimensional stack containing 3D stacks for all channels).
+
+```python
+import bioformats as bf
+import numpy as np
+rdr = bf.ImageReader(root.fullpath)
+# Obtain hyperstack
+stack = []
+for z in range(root.md.SizeZ[root.series_indx]):  # Loop through z slices
+    im = rdr.read(z=z, series=root.series_indx, rescale=False)
+    stack.append(im)
+stack = np.array(stack)
+```
+
+The projection image is obtained as follows:
+```python
+# Compute z projection for channel containing cilia
+proj = np.amax(stack[:,:,:,root.contains_cilia],0)
+```
+
