@@ -1,28 +1,11 @@
 #!/usr/bin/env python3
 #-*- coding: utf-8 -*-
-
 '''
 First tried Using read_lif to access .lif files: https://pypi.org/project/read-lif/
 But realized that the metadata obtained with read_lif is crap (wrong X,Y,Z pixel size)
 Then tried bioformats: https://pypi.org/project/python-bioformats/
 Bioformats gives same pixelsize values as when loaded with Fiji, which is reassuring.
 '''
-
-'''
-Data file organization:
-DATA_CILIA (equivalent to workspace3/POC5_project/osteoblast)
-|-- 20200121 (date)
-|   |-- Project1
-|       |-- Project.lif (lif file saved by Leica software)
-|       |-- S01_OB002_P2_B1_X65_FOP-647_Poc5-488_GT335-555
-|       |-- [...] One folder per series (stack)
-|       |-- S05_OB004_P2_B2_X63_Z1.68_FOP-647_Poc5-488_GT335-555
-|   |-- Project2
-|       |-- [...]
-|-- 20200123 (other date)
-    |-- [...]
-'''
-
 # import os, sys, lif, re, GUI
 # import numpy as np
 # import utilities as utils
