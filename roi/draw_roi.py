@@ -37,6 +37,8 @@ class DrawCiliumContour:
         '''
         cv2.namedWindow(self.handler)
         cv2.createTrackbar('Threshold', self.handler, 255, 255, self.callback_trackbar)
+        # https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_gui/py_trackbar/py_trackbar.html#code-demo
+        cv2.createTrackbar('0 : OFF \n1 : ON', 'image',0,1,nothing)
         cv2.setMouseCallback(self.handler, self.callback_mouse)  # Bind window to callback_mouse
         cv2.imshow(self.handler,self.im_copy1)
         while True:

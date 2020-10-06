@@ -42,25 +42,28 @@ if __name__ == '__main__':
     '''
     Below useful variables in root:
     root.fullpath = path to lif file
+    root.md = metadata of lif file
     root.series_indx = index of selected series
     root.series_name = name of selected series
     root.selected_chans = indices of selected channels
     root.contains_cilia = index of channel containing cilia
     '''
-    
-
-
-
-    # # Analyze one series
-    # selected_series = reader.chooseSerieIndex() # Let user chose the series
-    # hyperstack = reader.getSeries()[selected_series]
-    # # cv2.imwrite(os.path.join(path_to_lif,series_names[selected_series],'im.png'),np.concatenate((proj1,proj2),axis=1))
-    # # stack.getName()  # Name of stack
-    # # stack.get2DShape()  # Number of pixels
-    # stack = hyperstack.getFrame(T = 0, channel = 2)
-    # proj = utils.imLevels(np.amax(stack,0),0,100)
-    # my_roi = roi.RoiCilium(proj,'Set threshold and draw bounding polygon')  # Initialize class RoiCilium
-    # my_roi.contour.draw_contour()
+    import bioformats as bf
+    import numpy as np
+    import utilities as utils
+    rdr = bf.ImageReader(root.fullpath)
+    # Obtain hyperstack
+    stack = []
+    for z in range(root.md.SizeZ[root.series_indx]):  # Loop through z slices
+        im = rdr.read(z=z, series=root.series_indx, rescale=False)
+        stack.append(im)
+    stack = np.array(stack)
+    # Compute z projection for channel containing cilia
+    proj = np.amax(stack[:,:,:,root.contains_cilia],0)
+    utils.myimshow(proj)
+    import roi
+    my_roi = roi.RoiCilium(proj,'Set threshold and draw bounding polygon')  # Initialize class RoiCilium
+    my_roi.contour.draw_contour()
     # #
     # # Grab mask using contours defined by user
     # mask = np.broadcast_to(my_roi.contour.immask == 0, stack.shape)
