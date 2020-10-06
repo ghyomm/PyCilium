@@ -43,7 +43,7 @@ if __name__ == '__main__':
     stack = np.array(stack)
     # Compute z projection for channel containing cilia
     proj = np.amax(stack[:,:,:,root.contains_cilia],0)
-    utils.myimshow(proj)
+    # utils.myimshow(proj)
     import roi
     my_roi = roi.RoiCilium(proj,'Set threshold and draw bounding polygon')  # Initialize class RoiCilium
     my_roi.contour.draw_contour()
