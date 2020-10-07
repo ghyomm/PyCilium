@@ -1,6 +1,7 @@
 from typing import List, Optional
 from scipy.spatial.distance import cdist
 from uuid import uuid4
+import json
 import numpy as np
 import cv2
 import sys
@@ -53,7 +54,7 @@ class Point:
         return f'Point at {self.x, self.y}'
 
     def draw(self, img, color=(0, 255, 0)):
-        cv2.circle(img, (self.x, self.y), 1, color, -1)
+        cv2.circle(img, (self.x, self.y), 2, color, -1)
 
 
 class ROI:
@@ -61,6 +62,11 @@ class ROI:
         super().__init__()
         self._pts: List[Optional[Point]] = []
         self._id = uuid4()
+        self._closed = False
+
+    @property
+    def closed(self):
+        return self._closed
 
     @property
     def id(self):
@@ -81,22 +87,32 @@ class ROI:
         if ix is None:
             self.push(pt)
             return
-        self._pts = self._pts[:ix+1]
-        self._pts.append(pt)
-        self._pts.extend(self._pts[ix+1:])
+        if ix == 0 and len(self._pts) > 2:
+            self._closed = True
+            self.push(pt)
+            return
+        offset = 1
+        pts = self._pts[:ix+offset]
+        pts.append(pt)
+        pts.extend(self._pts[ix+offset:])
+        self._pts = pts
 
     def draw(self, img, pt_color=(0, 255, 0), l_color=(0, 255, 0)):
-        print('Drawing ROI')
         for ix, pt in enumerate(self._pts[:-1]):
             pt.draw(img, pt_color)
             n_pt = self._pts[ix + 1]
             cv2.line(img, (pt.x, pt.y), (n_pt.x, n_pt.y), l_color, 1)
-        if len(self._pts) > 1:
+        if len(self._pts) >= 1:
             self._pts[-1].draw(img, pt_color)
+        if self.closed:
+            cv2.line(img, (self._pts[-1].x, self._pts[-1].y), (self._pts[0].x, self._pts[0].y),
+                     l_color, 1)
 
     def remove_closest(self, x, y):
         ix = self.closest_point(x, y)
         if ix is not None:
+            if ix == 0 or ix == -1:
+                self._closed = False
             self.pop(ix)
 
     def is_point_inside(self, x, y):
@@ -107,16 +123,22 @@ class ROI:
         pts_arr = self._pts_array()
         if len(pts_arr.shape) != 2:
             return None
-        dist = cdist(np.array([(x, y)]), pts_arr)
+        dist = np.squeeze(cdist(np.array([(x, y)]), pts_arr))
+        print((x,y), pts_arr, dist)
         return np.argmin(dist)
 
     def _pts_array(self):
-        a = np.array([(pt.x, pt.y) for pt in self._pts])
+        a = np.array([(pt.x, pt.y) for pt in self._pts], dtype=np.int32)
         return a
 
     def to_dict(self):
-        d = {'id': str(self.id), 'points': self._pts_array()}
+        d = {'id': str(self.id), 'points': self._pts_array(), 'closed': self.closed}
         return d
+
+    def get_mask(self, img: np.ndarray):
+        mask = np.zeros(img.shape[:2], dtype=np.uint8)
+        cv2.fillConvexPoly(mask, self._pts_array(), 1)
+        return mask
 
 
 class RoiCilium:
@@ -130,27 +152,21 @@ class DrawCiliumContour:
         # self.pts = []  # Coordinates of bounding points
         self.rois: List[ROI] = []
         self.c_roi: Optional[ROI] = None
+        self.all_rois: Optional[List[dict]] = None
         self.handler = msg
         self.im_copy1 = self.im.copy()  # Original copy
         self.im_copy2 = self.im.copy()  # Original copy
         self.immask = np.zeros_like(im, dtype=np.uint8)  # Prepare mask
+        self.c_mask = np.zeros_like(im, dtype=np.uint8)  # Prepare mask
+        self.mask_mode = False
         self.th = None
         self.closest = None
         self.closest_last = None
 
     def update_rois(self):
-        print('UPDATING ROIs')
+        self.im_copy1 = self.im_copy2.copy()  # Reinitialize image
         for c_roi in self.rois:
             c_roi.draw(self.im_copy1)
-    # def draw_pts_lines(self):
-    #     '''Add points and lines drawn by user'''
-    #     if(len(self.pts)>0):
-    #         for i in range(len(self.pts)):  # Draw points
-    #             cv2.circle(self.im_copy1, tuple(self.pts[i]), 1, (0, 255, 0), -1)
-    #         for i in range(len(self.pts) - 1):  # Draw lines
-    #             cv2.line(self.im_copy1, tuple(self.pts[i]), tuple(self.pts[i + 1]), (0, 255, 0), 1)
-    #         if self.closest is not None:
-    #             cv2.circle(self.im_copy1, tuple(self.closest), 3, (255, 255, 0), 1)
 
     def draw_contour(self):
         """
@@ -167,9 +183,6 @@ class DrawCiliumContour:
         while True:
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):  # Hit `q` to exit
-                # if (len(self.pts)>2):
-                #     cv2.fillPoly(self.immask, np.array([self.pts]), (255, 255, 255), 1)
-
                 self.exit()
                 break  # Return to main function
             elif key == ord('n'):
@@ -177,10 +190,31 @@ class DrawCiliumContour:
                 print('>>> NEW ROI')
                 self.c_roi = ROI()
                 self.rois.append(self.c_roi)
+            elif key == ord('m'):
+                self.mask_mode = not self.mask_mode
+                if self.mask_mode:
+                    self.im_copy1 = self.im_copy2 = cv2.applyColorMap(255*self.immask, cv2.COLORMAP_HOT)
+                else:
+                    self.im_copy1 = self.im_copy2 = self.im.copy()
+            elif key == ord('c') and self.c_roi.closed:
+                self.c_mask = self.c_roi.get_mask(self.im_copy1)
+                self.segment_cilia()
+            elif key == ord('p'):
+                print('PAUSE')
             # time.sleep(0.01)  # Slow down while loop to reduce CPU usage
 
+    def segment_cilia(self):
+        cil_im = cv2.GaussianBlur(self.im * self.c_mask, (5, 5), 5)
+        th = np.quantile(cil_im[cil_im > 0], .90)
+        _, th_cil = cv2.threshold(cil_im, th, 255, cv2.THRESH_BINARY_INV)
+        # th_cil = cv2.adaptiveThreshold(cil_im, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+        #                                cv2.THRESH_BINARY, 11, 2)
+        # th_cil = cv2.medianBlur(th_cil, 5)
+        # TODO : findcontours, save them in the ROI so they can be saved as json
+        cv2.imshow('Thresholded', th_cil)
+
     def exit(self):
-        # TODO: Save ROIs
+        self.all_rois = [r.to_dict() for r in self.rois]
         cv2.destroyWindow(self.handler)
 
     def callback_trackbar(self, event):
@@ -202,12 +236,14 @@ class DrawCiliumContour:
             for i in range(len(gi[0])):
                 self.im_copy1[gi[0][i],gi[1][i],j] = sat_col[j]
         self.im_copy2 = self.im_copy1.copy()  # Keep copy without pts and lines
-        cv2.imshow(self.handler,self.im_copy1)
+        cv2.imshow(self.handler, self.im_copy1)
 
     def callback_mouse(self, event, x, y, flags, params):
         if event == cv2.EVENT_LBUTTONDOWN and self.c_roi is not None:
-            # self.pts.append([x, y])
             self.c_roi.add_pt(Point(x, y))
+            if self.c_roi.closed:
+                mask = self.c_roi.get_mask(self.im_copy1)
+                self.immask += mask
         if event == cv2.EVENT_MBUTTONDOWN and self.c_roi is not None:
             self.c_roi.remove_closest(x, y)
             # diff = np.sum(np.power(np.tile([x, y], [len(self.pts), 1]) - np.array(self.pts),2),1)
