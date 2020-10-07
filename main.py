@@ -6,12 +6,14 @@ But realized that the metadata obtained with read_lif is crap (wrong X,Y,Z pixel
 Then tried bioformats: https://pypi.org/project/python-bioformats/
 Bioformats gives same pixelsize values as when loaded with Fiji, which is reassuring.
 '''
+import sys
+
 
 if __name__ == '__main__':
 
     import GUI
     root = GUI.Root()  # Use class Root defined in GUI/TkDialog
-    root.mainloop()  # Run Tk interface
+    sys.exit(root.mainloop())  # Run Tk interface
     '''
     Below useful variables in root:
     root.fullpath = path to lif file
