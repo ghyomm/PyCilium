@@ -13,7 +13,8 @@ if __name__ == '__main__':
 
     import GUI
     root = GUI.Root()  # Use class Root defined in GUI/TkDialog
-    sys.exit(root.mainloop())  # Run Tk interface
+    root.protocol("WM_DELETE_WINDOW", root.exit)
+    root.mainloop()  # Run Tk interface
     '''
     Below useful variables in root:
     root.fullpath = path to lif file

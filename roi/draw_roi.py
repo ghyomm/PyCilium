@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import List, Optional
 from scipy.spatial.distance import cdist
 from uuid import uuid4
@@ -66,6 +67,8 @@ class ROI:
         self._id = uuid4()
         self._closed = False
         self.contour: Optional[np.ndarray] = None
+        self.cilium: Optional[dict] = None
+        self.ridge: Optional[dict] = None
         if data_dict is not None:
             self.from_dict(data_dict)
 
@@ -114,6 +117,10 @@ class ROI:
                      l_color, 1)
         if self.contour is not None:
             cv2.drawContours(img, [self.contour], 0, (125, 125, 125), 1)
+        if self.ridge is not None:
+            pts = np.vstack((self.ridge['y'], self.ridge['x'])).astype(np.int32).T
+            cv2.polylines(img, [pts],
+                          False, 200, 1)
 
     def remove_closest(self, x, y):
         ix = self.closest_point(x, y)
@@ -138,17 +145,46 @@ class ROI:
         a = np.array([(pt.x, pt.y) for pt in self._pts], dtype=np.int32)
         return a
 
+    @staticmethod
+    def _to_dumpable_dict(d: dict):
+        new_d = {}
+        for k, v in d.items():
+            try:
+                new_d[k] = v.tolist()
+            except AttributeError:
+                new_d[k] = v
+        return new_d
+
+    @staticmethod
+    def _array_from_json(d: dict):
+        new_d = {}
+        for k, v in d.items():
+            if isinstance(v, list):
+                v = np.array(v)
+            new_d[k] = v
+        return new_d
+
     def to_dict(self):
+        cilium = self._to_dumpable_dict(self.cilium)
+        ridge = self._to_dumpable_dict(self.ridge)
+
         d = {'id': str(self.id), 'points': self._pts_array().tolist(),
              'closed': self.closed,
-             'contour': self.contour.tolist()}
+             'contour': self.contour.tolist(),
+             'cilium': cilium,
+             'ridge': ridge}
         return d
 
     def from_dict(self, data):
         self._id = data['id']
         self._pts = [Point(pt[0], pt[1]) for pt in data['points']]
         self._closed = data['closed']
-        self.contour = np.array(data['contour'])
+        try:
+            self.contour = np.array(data['contour'])
+            self.ridge = self._array_from_json(data['ridge'])
+            self.cilium = self._array_from_json(data['cilium'])
+        except KeyError:
+            print('Processing was not done')
 
     def get_mask(self, img: np.ndarray):
         mask = np.zeros(img.shape[:2], dtype=np.uint8)
@@ -157,13 +193,14 @@ class ROI:
 
 
 class RoiCilium:
-    def __init__(self, imsrc, msg):
-        self.contour = DrawCiliumContour(imsrc, msg)
+    def __init__(self, imsrc, msg, img_path):
+        self.contour = DrawCiliumContour(imsrc, msg, img_path)
 
 
 class DrawCiliumContour:
-    def __init__(self, im, msg):
+    def __init__(self, im, msg, img_path):
         self.im = im  # Source image
+        self.img_path = Path(img_path)
         # self.pts = []  # Coordinates of bounding points
         self.rois: List[ROI] = []
         self.c_roi: Optional[ROI] = None
@@ -231,11 +268,15 @@ class DrawCiliumContour:
         # Keep the biggest object
         cnt = max(all_cnt, key=lambda x: cv2.contourArea(x))
         self.c_roi.contour = np.squeeze(cnt)
-        cv2.imshow('Thresholded', th_cil)
+        self.c_roi.cilium, self.c_roi.ridge = fit_cilium(self.im, th_cil)
+        # cv2.imshow('Thresholded', th_cil)
 
     def exit(self):
         javabridge.detach()
         self.all_rois = [r.to_dict() for r in self.rois]
+        json_path = self.img_path.parent / (self.img_path.stem + '.json')
+        with open(json_path, 'w') as jf:
+            json.dump(self.all_rois, jf, indent=2)
         cv2.destroyWindow(self.handler)
 
     def callback_trackbar(self, event):
@@ -267,26 +308,13 @@ class DrawCiliumContour:
                 self.immask += mask
         if event == cv2.EVENT_MBUTTONDOWN and self.c_roi is not None:
             self.c_roi.remove_closest(x, y)
-            # diff = np.sum(np.power(np.tile([x, y], [len(self.pts), 1]) - np.array(self.pts),2),1)
-            # del self.pts[diff.argmin()]
-            # diff = np.sum(np.power(np.tile([x, y], [len(self.pts), 1]) - np.array(self.pts), 2), 1)
-            # self.closest = self.pts[diff.argmin()]
             self.im_copy1 = self.im_copy2.copy()  # Reinitialize image
-            # self.closest_last = self.closest
-        # if event == cv2.EVENT_MOUSEMOVE and (len(self.pts) > 0):
-        #     Find reference point closest to latest mouse position (= closest reference point)
-        # diff = np.sum(np.power(np.tile([x, y], [len(self.pts), 1]) - np.array(self.pts), 2), 1)
-        # self.closest = self.pts[diff.argmin()]
-        # Update coordinates of closest reference point
-        # if self.closest_last != self.closest:
-        #     self.im_copy1 = self.im_copy2.copy()
-        #     self.closest_last = self.closest
-        # self.draw_pts_lines()
+
         self.update_rois()
         cv2.imshow(self.handler, self.im_copy1)
 
 
-def fit_cilium(im: np.ndarray, th_cil: np.ndarray, cnt: np.ndarray):
+def fit_cilium(im: np.ndarray, th_cil: np.ndarray):
     """
     Fit a segmented cilium to extract it and its ridge for statistics
 
@@ -294,7 +322,6 @@ def fit_cilium(im: np.ndarray, th_cil: np.ndarray, cnt: np.ndarray):
     ----------
     im: np.ndarray
     th_cil: np.ndarray
-    cnt: np.ndarray
 
     Return
     ------
@@ -313,9 +340,9 @@ def fit_cilium(im: np.ndarray, th_cil: np.ndarray, cnt: np.ndarray):
     """
     gi = th_cil > 0
     x, y = np.where(gi)
-    z = im[gi]
     xmin, xmax = x.min(), x.max()
     ymin, ymax = y.min(), y.max()
+    z = im[xmin:xmax, ymin:ymax]
     n = len(z.reshape(-1))
     bs = RectBivariateSpline(np.arange(xmin, xmax), np.arange(ymin, ymax), z, s=n*5)
     ze = bs.ev(x, y)
@@ -366,6 +393,6 @@ if __name__ == '__main__':
     stack = np.array(stack)
     # Compute z projection for channel containing cilia
     proj = np.amax(stack[:, :, :, 2], 0)
-    my_roi = roi.RoiCilium(proj, 'Set threshold and draw bounding polygon')
+    my_roi = roi.RoiCilium(proj, 'Set threshold and draw bounding polygon', ROOT_PATH)
     my_roi.contour.draw_contour()
 
