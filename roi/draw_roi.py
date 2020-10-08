@@ -6,6 +6,8 @@ import numpy as np
 import cv2
 import sys
 import time
+import javabridge
+from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 
 
 class Point:
@@ -58,11 +60,14 @@ class Point:
 
 
 class ROI:
-    def __init__(self) -> None:
+    def __init__(self, data_dict: Optional[dict] = None) -> None:
         super().__init__()
         self._pts: List[Optional[Point]] = []
         self._id = uuid4()
         self._closed = False
+        self.contour: Optional[np.ndarray] = None
+        if data_dict is not None:
+            self.from_dict(data_dict)
 
     @property
     def closed(self):
@@ -107,6 +112,8 @@ class ROI:
         if self.closed:
             cv2.line(img, (self._pts[-1].x, self._pts[-1].y), (self._pts[0].x, self._pts[0].y),
                      l_color, 1)
+        if self.contour is not None:
+            cv2.drawContours(img, [self.contour], 0, (125, 125, 125), 1)
 
     def remove_closest(self, x, y):
         ix = self.closest_point(x, y)
@@ -132,8 +139,16 @@ class ROI:
         return a
 
     def to_dict(self):
-        d = {'id': str(self.id), 'points': self._pts_array(), 'closed': self.closed}
+        d = {'id': str(self.id), 'points': self._pts_array().tolist(),
+             'closed': self.closed,
+             'contour': self.contour.tolist()}
         return d
+
+    def from_dict(self, data):
+        self._id = data['id']
+        self._pts = [Point(pt[0], pt[1]) for pt in data['points']]
+        self._closed = data['closed']
+        self.contour = np.array(data['contour'])
 
     def get_mask(self, img: np.ndarray):
         mask = np.zeros(img.shape[:2], dtype=np.uint8)
@@ -204,16 +219,22 @@ class DrawCiliumContour:
             # time.sleep(0.01)  # Slow down while loop to reduce CPU usage
 
     def segment_cilia(self):
-        cil_im = cv2.GaussianBlur(self.im * self.c_mask, (5, 5), 5)
-        th = np.quantile(cil_im[cil_im > 0], .90)
-        _, th_cil = cv2.threshold(cil_im, th, 255, cv2.THRESH_BINARY_INV)
-        # th_cil = cv2.adaptiveThreshold(cil_im, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-        #                                cv2.THRESH_BINARY, 11, 2)
-        # th_cil = cv2.medianBlur(th_cil, 5)
-        # TODO : findcontours, save them in the ROI so they can be saved as json
+        g_im = cv2.GaussianBlur(self.im, (5, 5), 5)
+        roi_masked = g_im * self.c_mask
+        mask_notroi = g_im * (1 - self.c_mask)
+        med = np.median(mask_notroi)
+        mad = np.median(np.abs(mask_notroi - med))
+        # th = np.quantile(roi_masked[roi_masked > 0], .90)
+        th = med + 5*mad
+        _, th_cil = cv2.threshold(roi_masked, th, 255, cv2.THRESH_BINARY)
+        all_cnt, _ = cv2.findContours(th_cil, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        # Keep the biggest object
+        cnt = max(all_cnt, key=lambda x: cv2.contourArea(x))
+        self.c_roi.contour = np.squeeze(cnt)
         cv2.imshow('Thresholded', th_cil)
 
     def exit(self):
+        javabridge.detach()
         self.all_rois = [r.to_dict() for r in self.rois]
         cv2.destroyWindow(self.handler)
 
@@ -254,21 +275,79 @@ class DrawCiliumContour:
             # self.closest_last = self.closest
         # if event == cv2.EVENT_MOUSEMOVE and (len(self.pts) > 0):
         #     Find reference point closest to latest mouse position (= closest reference point)
-            # diff = np.sum(np.power(np.tile([x, y], [len(self.pts), 1]) - np.array(self.pts), 2), 1)
-            # self.closest = self.pts[diff.argmin()]
-            # Update coordinates of closest reference point
-            # if self.closest_last != self.closest:
-            #     self.im_copy1 = self.im_copy2.copy()
-            #     self.closest_last = self.closest
+        # diff = np.sum(np.power(np.tile([x, y], [len(self.pts), 1]) - np.array(self.pts), 2), 1)
+        # self.closest = self.pts[diff.argmin()]
+        # Update coordinates of closest reference point
+        # if self.closest_last != self.closest:
+        #     self.im_copy1 = self.im_copy2.copy()
+        #     self.closest_last = self.closest
         # self.draw_pts_lines()
         self.update_rois()
         cv2.imshow(self.handler, self.im_copy1)
 
 
+def fit_cilium(im: np.ndarray, th_cil: np.ndarray, cnt: np.ndarray):
+    """
+    Fit a segmented cilium to extract it and its ridge for statistics
+
+    Parameters
+    ----------
+    im: np.ndarray
+    th_cil: np.ndarray
+    cnt: np.ndarray
+
+    Return
+    ------
+    cilium: dict
+    ridge: dict
+
+    Example
+    -------
+    # To check the results
+    >>> import matplotlib.pyplot as plt
+    >>> from mpl_toolkits.mplot3d import Axes3D
+    >>> fig = plt.gcf()
+    >>> ax = fig.add_subplot(1, 1, 1, projection='3d')
+    >>> ax.plot_trisurf(**cilium, antialiased=True, cmap=plt.cm.Spectral)
+    >>> ax.plot(ridge['x'], ridge['y'], ridge['z'] + 5, lw=3)
+    """
+    gi = th_cil > 0
+    x, y = np.where(gi)
+    z = im[gi]
+    xmin, xmax = x.min(), x.max()
+    ymin, ymax = y.min(), y.max()
+    n = len(z.reshape(-1))
+    bs = RectBivariateSpline(np.arange(xmin, xmax), np.arange(ymin, ymax), z, s=n*5)
+    ze = bs.ev(x, y)
+    fc = np.zeros_like(im)
+    fc[x, y] = ze
+    ux = np.unique(x)
+    uy = np.unique(y)
+    by = np.argmax(fc, 1)[ux]
+    bx = np.argmax(fc, 0)[uy]
+    sp = UnivariateSpline(ux, by, s=5*len(ux))
+    sp2 = UnivariateSpline(uy, bx, s=5*len(ux))
+    f_x = sp2(by)
+    f_y = sp(bx)
+    if len(ux) > len(uy):
+        order = np.argsort(bx)
+        xs = bx[order]
+        ys = f_y[order]
+    else:
+        order = np.argsort(by)
+        xs = f_x[order]
+        ys = by[order]
+    ridge_z = bs.ev(xs, ys)
+    cil_len = np.sum(np.sqrt(np.diff(xs)**2 + np.diff(ys)**2))
+    cilium = {'x': x, 'y': y, 'z': ze, 'length': cil_len}
+    ridge = {'x': xs, 'y': ys, 'z': ridge_z}
+
+    return cilium, ridge
+
+
 if __name__ == '__main__':
     import bioformats as bf
     import numpy as np
-    import javabridge
     import roi
 
     # Initialize javabridge etc
@@ -289,3 +368,4 @@ if __name__ == '__main__':
     proj = np.amax(stack[:, :, :, 2], 0)
     my_roi = roi.RoiCilium(proj, 'Set threshold and draw bounding polygon')
     my_roi.contour.draw_contour()
+
