@@ -61,10 +61,11 @@ class Point:
 
 
 class ROI:
-    def __init__(self, data_dict: Optional[dict] = None) -> None:
+    def __init__(self, data_dict: Optional[dict] = None, color=None) -> None:
         super().__init__()
         self._pts: List[Optional[Point]] = []
         self._id = uuid4()
+        self._color = color if color is not None else (0, 255, 0)
         self._closed = False
         self.contour: Optional[np.ndarray] = None
         self.cilium: Optional[dict] = None
@@ -105,16 +106,18 @@ class ROI:
         pts.extend(self._pts[ix+offset:])
         self._pts = pts
 
-    def draw(self, img, pt_color=(0, 255, 0), l_color=(0, 255, 0)):
+    def draw(self, img, ix: int = 0):
         for ix, pt in enumerate(self._pts[:-1]):
-            pt.draw(img, pt_color)
+            pt.draw(img, self._color)
             n_pt = self._pts[ix + 1]
-            cv2.line(img, (pt.x, pt.y), (n_pt.x, n_pt.y), l_color, 1)
+            cv2.line(img, (pt.x, pt.y), (n_pt.x, n_pt.y), self._color, 1)
         if len(self._pts) >= 1:
-            self._pts[-1].draw(img, pt_color)
+            self._pts[-1].draw(img, self._color)
+            cv2.putText(img, str(ix), (self._pts[0].x, self._pts[0].y),
+                        cv2.FONT_HERSHEY_PLAIN, 2, self._color)
         if self.closed:
             cv2.line(img, (self._pts[-1].x, self._pts[-1].y), (self._pts[0].x, self._pts[0].y),
-                     l_color, 1)
+                     self._color, 1)
         if self.contour is not None:
             cv2.drawContours(img, [self.contour], 0, (125, 125, 125), 1)
         if self.ridge is not None:
@@ -147,6 +150,8 @@ class ROI:
 
     @staticmethod
     def _to_dumpable_dict(d: dict):
+        if d is None:
+            return {}
         new_d = {}
         for k, v in d.items():
             try:
@@ -217,11 +222,13 @@ class DrawCiliumContour:
         self.th = None
         self.closest = None
         self.closest_last = None
+        with open('colors.json', 'r') as cf:
+            self._colors = json.load(cf)
 
     def update_rois(self):
         self.im_copy1 = self.im_copy2.copy()  # Reinitialize image
-        for c_roi in self.rois:
-            c_roi.draw(self.im_copy1)
+        for ix, c_roi in enumerate(self.rois):
+            c_roi.draw(self.im_copy1, ix)
 
     def draw_contour(self):
         """
@@ -243,7 +250,8 @@ class DrawCiliumContour:
             elif key == ord('n'):
                 # New ROI
                 self._roi_mode = True
-                self.c_roi = ROI()
+                n_color = self._colors[len(self.rois) % len(self._colors)]
+                self.c_roi = ROI(color=n_color)
                 self.rois.append(self.c_roi)
             elif key == ord('m'):
                 self.mask_mode = not self.mask_mode
