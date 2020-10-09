@@ -202,6 +202,9 @@ class DrawCiliumContour:
         self.im = im  # Source image
         self.img_path = Path(img_path)
         # self.pts = []  # Coordinates of bounding points
+        self._cx = -1
+        self._cy = -1
+        self._roi_mode = False
         self.rois: List[ROI] = []
         self.c_roi: Optional[ROI] = None
         self.all_rois: Optional[List[dict]] = None
@@ -239,7 +242,7 @@ class DrawCiliumContour:
                 break  # Return to main function
             elif key == ord('n'):
                 # New ROI
-                print('>>> NEW ROI')
+                self._roi_mode = True
                 self.c_roi = ROI()
                 self.rois.append(self.c_roi)
             elif key == ord('m'):
@@ -248,12 +251,25 @@ class DrawCiliumContour:
                     self.im_copy1 = self.im_copy2 = cv2.applyColorMap(255*self.immask, cv2.COLORMAP_HOT)
                 else:
                     self.im_copy1 = self.im_copy2 = self.im.copy()
+            elif key == ord('d'):
+                ix, r = self._find_roi_under_mouse(self._cx, self._cy)
+                if r is not None:
+                    self.rois.pop(ix)
+            elif key == ord('e'):
+                self._roi_mode = False
+                self.c_roi = None
             elif key == ord('c') and self.c_roi.closed:
                 self.c_mask = self.c_roi.get_mask(self.im_copy1)
                 self.segment_cilia()
             elif key == ord('p'):
                 print('PAUSE')
             # time.sleep(0.01)  # Slow down while loop to reduce CPU usage
+
+    def _find_roi_under_mouse(self, x, y):
+        for ix, r in enumerate(self.rois):
+            if r.is_point_inside(x, y):
+                return ix, r
+        return -1, None
 
     def segment_cilia(self):
         g_im = cv2.GaussianBlur(self.im, (5, 5), 5)
@@ -293,7 +309,7 @@ class DrawCiliumContour:
         sat = (tmp2 / 255).astype('uint8')  # Saturated pixels = 1
         gi = np.where(sat==1)  # Identify saturated pixels
         self.im_copy1 = cv2.applyColorMap(self.im_copy1, cv2.COLORMAP_HOT)
-        sat_col = [255, 0 ,0]  # Saturated pixels in blue
+        sat_col = [255, 0, 0]  # Saturated pixels in blue
         for j in range(3):
             for i in range(len(gi[0])):
                 self.im_copy1[gi[0][i],gi[1][i],j] = sat_col[j]
@@ -301,7 +317,9 @@ class DrawCiliumContour:
         cv2.imshow(self.handler, self.im_copy1)
 
     def callback_mouse(self, event, x, y, flags, params):
-        if event == cv2.EVENT_LBUTTONDOWN and self.c_roi is not None:
+        self._cx = x
+        self._cy = y
+        if event == cv2.EVENT_LBUTTONDOWN and self.c_roi is not None and self._roi_mode:
             self.c_roi.add_pt(Point(x, y))
             if self.c_roi.closed:
                 mask = self.c_roi.get_mask(self.im_copy1)
