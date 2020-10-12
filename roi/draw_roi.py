@@ -210,6 +210,7 @@ class DrawCiliumContour:
         self._cx = -1
         self._cy = -1
         self._roi_mode = False
+        self.k_mad = 5
         self.rois: List[ROI] = []
         self.c_roi: Optional[ROI] = None
         self.all_rois: Optional[List[dict]] = None
@@ -218,7 +219,7 @@ class DrawCiliumContour:
         self.im_copy2 = self.im.copy()  # Original copy
         self.immask = np.zeros_like(im, dtype=np.uint8)  # Prepare mask
         self.c_mask = np.zeros_like(im, dtype=np.uint8)  # Prepare mask
-        self.mask_mode = False
+        self.manual_mode = False
         self.th = None
         self.closest = None
         self.closest_last = None
@@ -229,6 +230,8 @@ class DrawCiliumContour:
             with open(self.json_path, 'r') as jf:
                 json_data = json.load(jf)
                 self.rois = [ROI(jd) for jd in json_data]
+            if len(self.rois) > 0:
+                self.c_roi = self.rois[0]
 
     def update_rois(self):
         self.im_copy1 = self.im_copy2.copy()  # Reinitialize image
@@ -243,6 +246,7 @@ class DrawCiliumContour:
                         flags=cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO | cv2.WINDOW_GUI_EXPANDED)
         cv2.resizeWindow(self.handler, 1000, 1000)
         cv2.createTrackbar('Threshold', self.handler, 110, 255, self.callback_trackbar)
+        cv2.createTrackbar('k-MAD', self.handler, self.k_mad, 15, self.callback_mad)
         # https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_gui/py_trackbar/py_trackbar.html#code-demo
         # cv2.createTrackbar('0 : OFF \n1 : ON', 'image',0,1,nothing)
         cv2.setMouseCallback(self.handler, self.callback_mouse)  # Bind window to callback_mouse
@@ -259,11 +263,8 @@ class DrawCiliumContour:
                 self.c_roi = ROI(color=n_color)
                 self.rois.append(self.c_roi)
             elif key == ord('m'):
-                self.mask_mode = not self.mask_mode
-                if self.mask_mode:
-                    self.im_copy1 = self.im_copy2 = cv2.applyColorMap(255*self.immask, cv2.COLORMAP_HOT)
-                else:
-                    self.im_copy1 = self.im_copy2 = self.im.copy()
+                self.manual_mode = not self.manual_mode
+                self._roi_mode = not self.manual_mode
             elif key == ord('d'):
                 ix, r = self._find_roi_under_mouse(self._cx, self._cy)
                 if r is not None:
@@ -271,11 +272,26 @@ class DrawCiliumContour:
             elif key == ord('e'):
                 self._roi_mode = False
                 self.c_roi = None
-            elif key == ord('c') and self.c_roi.closed:
+            elif key == ord('c') and self.c_roi is not None and self.c_roi.closed:
                 self.c_mask = self.c_roi.get_mask(self.im_copy1)
                 self.segment_cilia()
 
     def _find_roi_under_mouse(self, x, y):
+        """
+        Find the roi currently under the mouse cursor
+
+        Parameters
+        ----------
+        x: float
+        y: float
+
+        Return
+        ------
+        ix: int
+            Index in the list of ROIs. Eventually -1 if no roi under mouse
+        r: ROI
+            ROI object. Eventually None if no ROI under mouse
+        """
         for ix, r in enumerate(self.rois):
             if r.is_point_inside(x, y):
                 return ix, r
@@ -288,7 +304,7 @@ class DrawCiliumContour:
         med = np.median(mask_notroi)
         mad = np.median(np.abs(mask_notroi - med))
         # th = np.quantile(roi_masked[roi_masked > 0], .90)
-        th = med + 5*mad
+        th = med + self.k_mad*mad
         _, th_cil = cv2.threshold(roi_masked, th, 255, cv2.THRESH_BINARY)
         all_cnt, _ = cv2.findContours(th_cil, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         # Keep the biggest object
@@ -304,11 +320,17 @@ class DrawCiliumContour:
             json.dump(self.all_rois, jf, indent=2)
         cv2.destroyWindow(self.handler)
 
+    def callback_mad(self, event):
+        """
+        Callback for the trackbar setting the k for kMAD thresholding
+        """
+        self.k_mad = cv2.getTrackbarPos('k-MAD', self.handler)
+
     def callback_trackbar(self, event):
-        '''
+        """
         Callback function responding to trackbar
         Updates working copy of image as a function of threshold
-        '''
+        """
         self.th = cv2.getTrackbarPos('Threshold', self.handler)
         if self.th == 0:
             self.th = 1
@@ -316,23 +338,32 @@ class DrawCiliumContour:
         self.im_copy1 = (255 * (tmp1.astype('float32') / self.th)).astype('uint8')
         ret, tmp2 = cv2.threshold(self.im_copy1, 254, 255, cv2.THRESH_BINARY)
         sat = (tmp2 / 255).astype('uint8')  # Saturated pixels = 1
-        gi = np.where(sat==1)  # Identify saturated pixels
+        gi = np.where(sat == 1)  # Identify saturated pixels
         self.im_copy1 = cv2.applyColorMap(self.im_copy1, cv2.COLORMAP_HOT)
         sat_col = [255, 0, 0]  # Saturated pixels in blue
         for j in range(3):
             for i in range(len(gi[0])):
-                self.im_copy1[gi[0][i],gi[1][i],j] = sat_col[j]
+                self.im_copy1[gi[0][i], gi[1][i], j] = sat_col[j]
         self.im_copy2 = self.im_copy1.copy()  # Keep copy without pts and lines
         cv2.imshow(self.handler, self.im_copy1)
 
     def callback_mouse(self, event, x, y, flags, params):
         self._cx = x
         self._cy = y
+        # Editing the current ROI
         if event == cv2.EVENT_LBUTTONDOWN and self.c_roi is not None and self._roi_mode:
             self.c_roi.add_pt(Point(x, y))
             if self.c_roi.closed:
                 mask = self.c_roi.get_mask(self.im_copy1)
                 self.immask += mask
+        elif event == cv2.EVENT_LBUTTONDOWN and self.manual_mode:
+            ix, r = self._find_roi_under_mouse(self._cx, self._cy)
+            self.c_roi = r
+            if self.c_roi.ridge is None:
+                self.c_roi.ridge = {'x': [], 'y': [], 'z': []}
+            self.c_roi.ridge['x'] = np.hstack((self.c_roi.ridge.get('x', []), y))
+            self.c_roi.ridge['y'] = np.hstack((self.c_roi.ridge.get('y', []), x))
+            self.c_roi.ridge['z'] = np.hstack((self.c_roi.ridge.get('z', []), self.im[y, x]))
         if event == cv2.EVENT_MBUTTONDOWN and self.c_roi is not None:
             self.c_roi.remove_closest(x, y)
             self.im_copy1 = self.im_copy2.copy()  # Reinitialize image
@@ -348,7 +379,9 @@ def fit_cilium(im: np.ndarray, th_cil: np.ndarray):
     Parameters
     ----------
     im: np.ndarray
+        Raw fluorescence z-projection
     th_cil: np.ndarray
+        Thresholded image, with the cilium being non-zero elements
 
     Return
     ------
@@ -365,24 +398,34 @@ def fit_cilium(im: np.ndarray, th_cil: np.ndarray):
     >>> ax.plot_trisurf(**cilium, antialiased=True, cmap=plt.cm.Spectral)
     >>> ax.plot(ridge['x'], ridge['y'], ridge['z'] + 5, lw=3)
     """
+    # Get the cilium indices
     gi = th_cil > 0
     x, y = np.where(gi)
+    # Rectangle around the cilum
     xmin, xmax = x.min(), x.max()
     ymin, ymax = y.min(), y.max()
     z = im[xmin:xmax, ymin:ymax]
+    # Number of elements in the rectangle
     n = len(z.reshape(-1))
+    # Fit a 2D spline on the fluorescence signal with some level of smooth
     bs = RectBivariateSpline(np.arange(xmin, xmax), np.arange(ymin, ymax), z, s=n*5)
+    # Get a smoothed version of the cilium
     ze = bs.ev(x, y)
+    # Put this in a black image
     fc = np.zeros_like(im)
     fc[x, y] = ze
+    # Unique coordinates
     ux = np.unique(x)
     uy = np.unique(y)
+    # Maxima for each x and y
     by = np.argmax(fc, 1)[ux]
     bx = np.argmax(fc, 0)[uy]
+    # Fit a spline to those maxima, separately depending on whether we use x or y
     sp = UnivariateSpline(ux, by, s=5*len(ux))
     sp2 = UnivariateSpline(uy, bx, s=5*len(ux))
     f_x = sp2(by)
     f_y = sp(bx)
+    # Chose the orientation with most points
     if len(ux) > len(uy):
         order = np.argsort(bx)
         xs = bx[order]
@@ -391,7 +434,9 @@ def fit_cilium(im: np.ndarray, th_cil: np.ndarray):
         order = np.argsort(by)
         xs = f_x[order]
         ys = by[order]
+    # Ridge: Estimated fluorescence value at the coordinates from which the maxima were found
     ridge_z = bs.ev(xs, ys)
+    # Length of cilium: lots of tiny triangles
     cil_len = np.sum(np.sqrt(np.diff(xs)**2 + np.diff(ys)**2))
     cilium = {'x': x, 'y': y, 'z': ze, 'length': cil_len}
     ridge = {'x': xs, 'y': ys, 'z': ridge_z}
