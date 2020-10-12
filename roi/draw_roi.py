@@ -67,7 +67,7 @@ class ROI:
         self._id = uuid4()
         self._color = color if color is not None else (0, 255, 0)
         self._closed = False
-        self.contour: Optional[np.ndarray] = None
+        self.contour: np.ndarray = np.array([])
         self.cilium: Optional[dict] = None
         self.ridge: Optional[dict] = None
         if data_dict is not None:
@@ -106,19 +106,19 @@ class ROI:
         pts.extend(self._pts[ix+offset:])
         self._pts = pts
 
-    def draw(self, img, ix: int = 0):
+    def draw(self, img, ix_roi: int = 0):
         for ix, pt in enumerate(self._pts[:-1]):
             pt.draw(img, self._color)
             n_pt = self._pts[ix + 1]
             cv2.line(img, (pt.x, pt.y), (n_pt.x, n_pt.y), self._color, 1)
         if len(self._pts) >= 1:
             self._pts[-1].draw(img, self._color)
-            cv2.putText(img, str(ix), (self._pts[0].x, self._pts[0].y),
+            cv2.putText(img, str(ix_roi), (self._pts[0].x, self._pts[0].y),
                         cv2.FONT_HERSHEY_PLAIN, 2, self._color)
         if self.closed:
             cv2.line(img, (self._pts[-1].x, self._pts[-1].y), (self._pts[0].x, self._pts[0].y),
                      self._color, 1)
-        if self.contour is not None:
+        if len(self.contour) > 0:
             cv2.drawContours(img, [self.contour], 0, (125, 125, 125), 1)
         if self.ridge is not None:
             pts = np.vstack((self.ridge['y'], self.ridge['x'])).astype(np.int32).T
@@ -141,7 +141,6 @@ class ROI:
         if len(pts_arr.shape) != 2:
             return None
         dist = np.squeeze(cdist(np.array([(x, y)]), pts_arr))
-        print((x,y), pts_arr, dist)
         return np.argmin(dist)
 
     def _pts_array(self):
@@ -421,4 +420,5 @@ if __name__ == '__main__':
     proj = np.amax(stack[:, :, :, 2], 0)
     my_roi = roi.RoiCilium(proj, 'Set threshold and draw bounding polygon', ROOT_PATH)
     my_roi.contour.draw_contour()
+    javabridge.kill_vm()
 

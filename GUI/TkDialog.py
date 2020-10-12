@@ -37,6 +37,9 @@ import numpy as np
 import utilities as utils
 from resizeimage import resizeimage
 from pathlib import Path
+import javabridge
+from typing import Optional
+import roi
 
 
 class Root(Tk):
@@ -46,11 +49,12 @@ class Root(Tk):
         self.series_indx = ''  # Index of selected series
         self.selected_chans = []  # Indices of selected channels
         self.selected_chans_mem = []  # To keep track of selected channels in previous step
-        self.contains_cilia = None
+        self.contains_cilia: Optional[int] = None
         self.width = 1200
         self.height = 800
         self.bg_col = '#ddd'  # Default background color for widgets
         self.button_col = '#fff'  # Default color for buttons
+        self.lif_file: Optional[lif.LifClass] = None
         self.build_tkwindow()
 
     def build_tkwindow(self):
@@ -120,7 +124,7 @@ class Root(Tk):
         self.lb_chan.pack(side='top', anchor='w', padx=20, pady=5)
         self.lb_chan.bind('<<ListboxSelect>>', self.on_chan_select)  # Bind to event handler
         # OK Button
-        self.b_ok = ttk.Button(self.right_middlef, text="OK", command=self.exit)
+        self.b_ok = ttk.Button(self.right_middlef, text="OK", command=self.run_roi)
         self.b_ok.pack(side='bottom', anchor='w', padx=20, pady=5)
 
         ### Bottom frame for projection images
@@ -128,9 +132,18 @@ class Root(Tk):
         self.bottomf.pack(side='bottom', fill='both', padx=10, pady=5, expand=True)
         self.bottomf.configure(relief=RAISED, bd=2)
 
-    def exit(self):
+    def run_roi(self):
         # TODO: Open the DrawROI window
+        if self.lif_file is None:
+            return
+        cilia_stack = self.lif_file.get_serie_stack(self.series_indx)
+        cilia_proj = cilia_stack[..., self.contains_cilia].max(0)
+        my_roi = roi.RoiCilium(cilia_proj, 'Set threshold and draw bounding polygon', self.fullpath)
+        my_roi.contour.draw_contour()
+
+    def exit(self):
         self.destroy()
+        javabridge.kill_vm()
 
     def fileDialog(self):
         '''
@@ -158,11 +171,11 @@ class Root(Tk):
             raise ValueError('Several folders in path match date format yyyymmdd.')
         # Below: use class Lif defined in lif/LifClass.py to handle lif file management
         parent_folder = Path(self.fullpath).parent.parent.parent.as_posix()
-        Lif = lif.LifFile(parent_folder, self.date, path_comp[-1])
-        Lif.get_metadata(save=True)  # Puts metadata in lif.md
+        self.lif_file = lif.LifFile(parent_folder, self.date, path_comp[-1])
+        self.lif_file.get_metadata(save=True)  # Puts metadata in lif.md
         self.lb_series.delete(0, 'end')  # Clear listbox
         # # Adjust width of listbox to max string length in series names
-        series_names = Lif.md['Name'].tolist()
+        series_names = self.lif_file.md['Name'].tolist()
         # len_max = 0
         # for m in series_names:
         #     if len(m) > len_max:
@@ -170,8 +183,8 @@ class Root(Tk):
         # self.lb_series.configure(width=len_max)
         # Update listbox with series names
         self.lb_series.insert('end', *series_names)
-        Lif.get_proj()
-        self.md = Lif.md  # Store metadata (for use in other functions)
+        self.lif_file.get_proj()
+        self.md = self.lif_file.md  # Store metadata (for use in other functions)
 
     def on_series_select(self, evt):
         '''
