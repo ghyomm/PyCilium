@@ -205,6 +205,7 @@ class DrawCiliumContour:
     def __init__(self, im, msg, img_path):
         self.im = im  # Source image
         self.img_path = Path(img_path)
+        self.json_path = self.img_path.parent / (self.img_path.stem + '.json')
         # self.pts = []  # Coordinates of bounding points
         self._cx = -1
         self._cy = -1
@@ -223,6 +224,11 @@ class DrawCiliumContour:
         self.closest_last = None
         with open('colors.json', 'r') as cf:
             self._colors = json.load(cf)
+        # Reopen previously saved ROIs
+        if self.json_path.exists():
+            with open(self.json_path, 'r') as jf:
+                json_data = json.load(jf)
+                self.rois = [ROI(jd) for jd in json_data]
 
     def update_rois(self):
         self.im_copy1 = self.im_copy2.copy()  # Reinitialize image
@@ -268,9 +274,6 @@ class DrawCiliumContour:
             elif key == ord('c') and self.c_roi.closed:
                 self.c_mask = self.c_roi.get_mask(self.im_copy1)
                 self.segment_cilia()
-            elif key == ord('p'):
-                print('PAUSE')
-            # time.sleep(0.01)  # Slow down while loop to reduce CPU usage
 
     def _find_roi_under_mouse(self, x, y):
         for ix, r in enumerate(self.rois):
@@ -297,8 +300,7 @@ class DrawCiliumContour:
     def exit(self):
         javabridge.detach()
         self.all_rois = [r.to_dict() for r in self.rois]
-        json_path = self.img_path.parent / (self.img_path.stem + '.json')
-        with open(json_path, 'w') as jf:
+        with open(self.json_path, 'w') as jf:
             json.dump(self.all_rois, jf, indent=2)
         cv2.destroyWindow(self.handler)
 

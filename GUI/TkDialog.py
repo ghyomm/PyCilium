@@ -134,7 +134,7 @@ class Root(Tk):
 
     def run_roi(self):
         # TODO: Open the DrawROI window
-        if self.lif_file is None:
+        if self.lif_file is None and self.contains_cilia is not None:
             return
         cilia_stack = self.lif_file.get_serie_stack(self.series_indx)
         cilia_proj = cilia_stack[..., self.contains_cilia].max(0)
