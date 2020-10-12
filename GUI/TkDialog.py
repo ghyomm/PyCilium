@@ -138,7 +138,8 @@ class Root(Tk):
             return
         cilia_stack = self.lif_file.get_serie_stack(self.series_indx)
         cilia_proj = cilia_stack[..., self.contains_cilia].max(0)
-        my_roi = roi.RoiCilium(cilia_proj, 'Set threshold and draw bounding polygon', self.fullpath)
+        my_roi = roi.RoiCilium(cilia_stack, self.contains_cilia,
+                               'Set threshold and draw bounding polygon', self.fullpath)
         my_roi.contour.draw_contour()
 
     def exit(self):

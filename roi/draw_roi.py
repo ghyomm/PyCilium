@@ -9,7 +9,7 @@ import sys
 import time
 import javabridge
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
-
+from functools import partial
 
 class Point:
 
@@ -197,15 +197,20 @@ class ROI:
 
 
 class RoiCilium:
-    def __init__(self, imsrc, msg, img_path):
-        self.contour = DrawCiliumContour(imsrc, msg, img_path)
+    def __init__(self, full_stack, ch_ix: int, msg, img_path, ):
+        self.contour = DrawCiliumContour(full_stack, ch_ix, msg, img_path)
 
 
 class DrawCiliumContour:
-    def __init__(self, im, msg, img_path):
-        self.im = im  # Source image
+    def __init__(self, full_stack, ch_ix, msg, img_path):
+        self.im = full_stack[..., ch_ix].max(0)  # Source image
+        self.ch_cil = ch_ix
         self.img_path = Path(img_path)
         self.json_path = self.img_path.parent / (self.img_path.stem + '.json')
+        self.full_stack = full_stack
+        self.full_adj_stack = full_stack.copy()
+        self.overlays = np.zeros(full_stack.shape[-1], dtype=np.bool)
+        self.overlays[ch_ix] = True
         # self.pts = []  # Coordinates of bounding points
         self._cx = -1
         self._cy = -1
@@ -217,10 +222,10 @@ class DrawCiliumContour:
         self.handler = msg
         self.im_copy1 = self.im.copy()  # Original copy
         self.im_copy2 = self.im.copy()  # Original copy
-        self.immask = np.zeros_like(im, dtype=np.uint8)  # Prepare mask
-        self.c_mask = np.zeros_like(im, dtype=np.uint8)  # Prepare mask
+        self.immask = np.zeros_like(self.im, dtype=np.uint8)  # Prepare mask
+        self.c_mask = np.zeros_like(self.im, dtype=np.uint8)  # Prepare mask
         self.manual_mode = False
-        self.th = None
+        self.th = 110
         self.closest = None
         self.closest_last = None
         with open('colors.json', 'r') as cf:
@@ -234,9 +239,31 @@ class DrawCiliumContour:
                 self.c_roi = self.rois[0]
 
     def update_rois(self):
-        self.im_copy1 = self.im_copy2.copy()  # Reinitialize image
+        self.im_copy1 = self.apply_th(self.im_copy2.copy(), self.th)  # Reinitialize image
+        n_overlays = np.sum(self.overlays)
+        self.im_copy1 = (n_overlays / len(self.overlays)) * self.im_copy1.astype(np.float32)
+        for ix, state in enumerate(self.overlays):
+            if ix == self.ch_cil:
+                continue
+            self.im_copy1 += self.full_adj_stack[ix, ...] / n_overlays
         for ix, c_roi in enumerate(self.rois):
             c_roi.draw(self.im_copy1, ix)
+
+    def over_ch(self, state, ch_ix: int):
+        self.overlays[ch_ix] = state
+
+    def adjust_th(self, event, ch: int):
+        img = self.apply_th(self.full_stack[..., ch].copy(),
+                            cv2.getTrackbarPos(f'Channel {ch} - Threshold', ''))
+        self.full_adj_stack[..., ch] = img
+
+    def add_other_channels(self):
+        for ch in range(self.full_stack.shape[-1]):
+            if ch == self.ch_cil:
+                continue
+            callback = partial(self.adjust_th, ch)
+            cv2.createTrackbar(f'Channel {ch} - Threshold', '', 0, 255, callback)
+            cv2.createButton(f'Channel {ch}', self.over_ch, ch, cv2.QT_CHECKBOX, 0)
 
     def draw_contour(self):
         """
@@ -247,6 +274,7 @@ class DrawCiliumContour:
         cv2.resizeWindow(self.handler, 1000, 1000)
         cv2.createTrackbar('Threshold', self.handler, 110, 255, self.callback_trackbar)
         cv2.createTrackbar('k-MAD', self.handler, self.k_mad, 15, self.callback_mad)
+        self.add_other_channels()
         # https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_gui/py_trackbar/py_trackbar.html#code-demo
         # cv2.createTrackbar('0 : OFF \n1 : ON', 'image',0,1,nothing)
         cv2.setMouseCallback(self.handler, self.callback_mouse)  # Bind window to callback_mouse
@@ -334,18 +362,28 @@ class DrawCiliumContour:
         self.th = cv2.getTrackbarPos('Threshold', self.handler)
         if self.th == 0:
             self.th = 1
-        ret, tmp1 = cv2.threshold(self.im, self.th, 255, cv2.THRESH_TRUNC)
-        self.im_copy1 = (255 * (tmp1.astype('float32') / self.th)).astype('uint8')
-        ret, tmp2 = cv2.threshold(self.im_copy1, 254, 255, cv2.THRESH_BINARY)
-        sat = (tmp2 / 255).astype('uint8')  # Saturated pixels = 1
-        gi = np.where(sat == 1)  # Identify saturated pixels
-        self.im_copy1 = cv2.applyColorMap(self.im_copy1, cv2.COLORMAP_HOT)
-        sat_col = [255, 0, 0]  # Saturated pixels in blue
-        for j in range(3):
-            for i in range(len(gi[0])):
-                self.im_copy1[gi[0][i], gi[1][i], j] = sat_col[j]
-        self.im_copy2 = self.im_copy1.copy()  # Keep copy without pts and lines
+        th_im = self.apply_th(self.im.copy(), self.th)
+        self.im_copy1 = th_im
+        self.im_copy2 = th_im.copy()  # Keep copy without pts and lines
         cv2.imshow(self.handler, self.im_copy1)
+
+    @staticmethod
+    def apply_th(img, th):
+        ret, tmp1 = cv2.threshold(img, th, 255, cv2.THRESH_TRUNC)
+        img = (255 * (tmp1.astype('float32') / th)).astype('uint8')
+        ret, tmp2 = cv2.threshold(img, 254, 255, cv2.THRESH_BINARY)
+        sat = (tmp2 / 255).astype('uint8')  # Saturated pixels = 1
+        # gi = np.where(sat == 1)  # Identify saturated pixels
+        gi = sat == 1  # Identify saturated pixels
+        img = cv2.applyColorMap(img, cv2.COLORMAP_HOT)
+        sat_col = [255, 0, 0]  # Saturated pixels in blue
+        img[gi] = np.tile(sat_col, (np.sum(gi), 1))
+        # for j in range(3):
+        #     for i in range(len(gi[0])):
+        #         img[gi[0][i], gi[1][i], j] = sat_col[j]
+        # self.im_copy2 = self.im_copy1.copy()  # Keep copy without pts and lines
+        # cv2.imshow(self.handler, self.im_copy1)
+        return img
 
     def callback_mouse(self, event, x, y, flags, params):
         self._cx = x
@@ -464,8 +502,8 @@ if __name__ == '__main__':
         stack.append(im)
     stack = np.array(stack)
     # Compute z projection for channel containing cilia
-    proj = np.amax(stack[:, :, :, 2], 0)
-    my_roi = roi.RoiCilium(proj, 'Set threshold and draw bounding polygon', ROOT_PATH)
+    # proj = np.amax(stack[:, :, :, 2], 0)
+    my_roi = roi.RoiCilium(stack, 2, 'Set threshold and draw bounding polygon', ROOT_PATH)
     my_roi.contour.draw_contour()
     javabridge.kill_vm()
 
