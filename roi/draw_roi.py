@@ -120,7 +120,7 @@ class ROI:
                      self._color, 1)
         if len(self.contour) > 0:
             cv2.drawContours(img, [self.contour], 0, (125, 125, 125), 1)
-        if self.ridge is not None:
+        if self.ridge is not None and 'y' in self.ridge.keys():
             pts = np.vstack((self.ridge['y'], self.ridge['x'])).astype(np.int32).T
             cv2.polylines(img, [pts],
                           False, 200, 1)
@@ -422,6 +422,10 @@ class DrawCiliumContour:
             self.c_roi.ridge['x'] = np.hstack((self.c_roi.ridge.get('x', []), y))
             self.c_roi.ridge['y'] = np.hstack((self.c_roi.ridge.get('y', []), x))
             self.c_roi.ridge['z'] = np.hstack((self.c_roi.ridge.get('z', []), self.im[y, x]))
+        elif event == cv2.EVENT_LBUTTONDOWN and not self.manual_mode and not self._roi_mode:
+            ix, r = self._find_roi_under_mouse(self._cx, self._cy)
+            self.c_roi = r
+            self._roi_mode = True
         if event == cv2.EVENT_MBUTTONDOWN and self.c_roi is not None:
             self.c_roi.remove_closest(x, y)
             self.im_copy1 = self.im_copy2.copy()  # Reinitialize image
@@ -496,8 +500,8 @@ def fit_cilium(im: np.ndarray, th_cil: np.ndarray):
     ridge_z = bs.ev(xs, ys)
     # Length of cilium: lots of tiny triangles
     cil_len = np.sum(np.sqrt(np.diff(xs)**2 + np.diff(ys)**2))
-    cilium = {'x': x, 'y': y, 'z': ze, 'length': cil_len}
-    ridge = {'x': xs, 'y': ys, 'z': ridge_z}
+    cilium = {'x': x, 'y': y, 'z': ze}
+    ridge = {'x': xs, 'y': ys, 'z': ridge_z, 'length': cil_len}
 
     return cilium, ridge
 
