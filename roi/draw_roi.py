@@ -5,11 +5,10 @@ from uuid import uuid4
 import json
 import numpy as np
 import cv2
-import sys
-import time
 import javabridge
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 from functools import partial
+
 
 class Point:
 
@@ -67,6 +66,7 @@ class ROI:
         self._id = uuid4()
         self._color = color if color is not None else (0, 255, 0)
         self._closed = False
+        self.k_mad = 5
         self.contour: np.ndarray = np.array([])
         self.cilium: Optional[dict] = None
         self.ridge: Optional[dict] = None
@@ -175,6 +175,7 @@ class ROI:
         d = {'id': str(self.id), 'points': self._pts_array().tolist(),
              'closed': self.closed,
              'contour': self.contour.tolist(),
+             'k_mad': self.k_mad,
              'cilium': cilium,
              'ridge': ridge}
         return d
@@ -183,6 +184,7 @@ class ROI:
         self._id = data['id']
         self._pts = [Point(pt[0], pt[1]) for pt in data['points']]
         self._closed = data['closed']
+        self.k_mad = data['k_mad']
         try:
             self.contour = np.array(data['contour'])
             self.ridge = self._array_from_json(data['ridge'])
@@ -207,9 +209,9 @@ class DrawCiliumContour:
         self.ch_cil = ch_ix
         self.img_path = Path(img_path)
         self.json_path = self.img_path.parent / (self.img_path.stem + '.json')
-        self.full_stack = full_stack
-        self.full_adj_stack = full_stack.copy()
-        self.overlays = np.zeros(full_stack.shape[-1], dtype=np.bool)
+        self.full_stack = np.max(full_stack, 0)
+        self.full_adj_stack = self.full_stack.copy()
+        self.overlays = np.zeros(self.full_stack.shape[-1], dtype=np.bool)
         self.overlays[ch_ix] = True
         # self.pts = []  # Coordinates of bounding points
         self._cx = -1
@@ -239,29 +241,31 @@ class DrawCiliumContour:
                 self.c_roi = self.rois[0]
 
     def update_rois(self):
-        self.im_copy1 = self.apply_th(self.im_copy2.copy(), self.th)  # Reinitialize image
+        # Reinitialize image
+        self.im_copy1 = np.zeros(self.im_copy1.shape[:2], dtype=np.float32)
+        self.full_adj_stack[..., self.ch_cil] = self.apply_th(self.im_copy2.copy(), self.th)
         n_overlays = np.sum(self.overlays)
-        self.im_copy1 = (n_overlays / len(self.overlays)) * self.im_copy1.astype(np.float32)
         for ix, state in enumerate(self.overlays):
-            if ix == self.ch_cil:
-                continue
-            self.im_copy1 += self.full_adj_stack[ix, ...] / n_overlays
+            if state:
+                self.im_copy1 += self.full_adj_stack[..., ix] / n_overlays
+        self.im_copy1 = self.apply_color_map(self.im_copy1)
         for ix, c_roi in enumerate(self.rois):
             c_roi.draw(self.im_copy1, ix)
+        cv2.imshow(self.handler, self.im_copy1)
 
     def over_ch(self, state, ch_ix: int):
         self.overlays[ch_ix] = state
 
     def adjust_th(self, event, ch: int):
-        img = self.apply_th(self.full_stack[..., ch].copy(),
-                            cv2.getTrackbarPos(f'Channel {ch} - Threshold', ''))
+        img = self.apply_th(self.full_stack[..., ch].copy(), event)
         self.full_adj_stack[..., ch] = img
+        self.update_rois()
 
     def add_other_channels(self):
         for ch in range(self.full_stack.shape[-1]):
             if ch == self.ch_cil:
                 continue
-            callback = partial(self.adjust_th, ch)
+            callback = partial(self.adjust_th, ch=ch)
             cv2.createTrackbar(f'Channel {ch} - Threshold', '', 0, 255, callback)
             cv2.createButton(f'Channel {ch}', self.over_ch, ch, cv2.QT_CHECKBOX, 0)
 
@@ -297,12 +301,14 @@ class DrawCiliumContour:
                 ix, r = self._find_roi_under_mouse(self._cx, self._cy)
                 if r is not None:
                     self.rois.pop(ix)
+                    self.update_rois()
             elif key == ord('e'):
                 self._roi_mode = False
                 self.c_roi = None
             elif key == ord('c') and self.c_roi is not None and self.c_roi.closed:
                 self.c_mask = self.c_roi.get_mask(self.im_copy1)
                 self.segment_cilia()
+                self.update_rois()
 
     def _find_roi_under_mouse(self, x, y):
         """
@@ -332,6 +338,7 @@ class DrawCiliumContour:
         med = np.median(mask_notroi)
         mad = np.median(np.abs(mask_notroi - med))
         # th = np.quantile(roi_masked[roi_masked > 0], .90)
+        self.c_roi.k_mad = self.k_mad
         th = med + self.k_mad*mad
         _, th_cil = cv2.threshold(roi_masked, th, 255, cv2.THRESH_BINARY)
         all_cnt, _ = cv2.findContours(th_cil, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
@@ -363,27 +370,40 @@ class DrawCiliumContour:
         if self.th == 0:
             self.th = 1
         th_im = self.apply_th(self.im.copy(), self.th)
-        self.im_copy1 = th_im
-        self.im_copy2 = th_im.copy()  # Keep copy without pts and lines
-        cv2.imshow(self.handler, self.im_copy1)
+        # self.im_copy1 = th_im
+        # self.im_copy2 = th_im.copy()  # Keep copy without pts and lines
+        # cv2.imshow(self.handler, self.im_copy1)
+        self.full_adj_stack[..., self.ch_cil] = th_im
+        self.update_rois()
 
     @staticmethod
     def apply_th(img, th):
-        ret, tmp1 = cv2.threshold(img, th, 255, cv2.THRESH_TRUNC)
+        if len(img.shape) == 3:
+            bw = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            bw = img.copy()
+        ret, tmp1 = cv2.threshold(bw, th, 255, cv2.THRESH_TRUNC)
         img = (255 * (tmp1.astype('float32') / th)).astype('uint8')
-        ret, tmp2 = cv2.threshold(img, 254, 255, cv2.THRESH_BINARY)
+        ret, tmp2 = cv2.threshold(bw, 254, 255, cv2.THRESH_BINARY)
         sat = (tmp2 / 255).astype('uint8')  # Saturated pixels = 1
         # gi = np.where(sat == 1)  # Identify saturated pixels
         gi = sat == 1  # Identify saturated pixels
-        img = cv2.applyColorMap(img, cv2.COLORMAP_HOT)
-        sat_col = [255, 0, 0]  # Saturated pixels in blue
-        img[gi] = np.tile(sat_col, (np.sum(gi), 1))
+        img[gi] = 1
+        return img
+
+    @staticmethod
+    def apply_color_map(img: np.ndarray):
+        img = img.astype(np.uint8)
+        img = cv2.applyColorMap(img, cv2.COLORMAP_INFERNO)
+        # sat_col = [255, 0, 0]  # Saturated pixels in blue
+        # img[gi] = np.tile(sat_col, (np.sum(gi), 1))
+        return img
         # for j in range(3):
         #     for i in range(len(gi[0])):
         #         img[gi[0][i], gi[1][i], j] = sat_col[j]
         # self.im_copy2 = self.im_copy1.copy()  # Keep copy without pts and lines
         # cv2.imshow(self.handler, self.im_copy1)
-        return img
+        # return img
 
     def callback_mouse(self, event, x, y, flags, params):
         self._cx = x
