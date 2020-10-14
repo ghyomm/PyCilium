@@ -122,8 +122,16 @@ class ROI:
             cv2.drawContours(img, [self.contour], 0, (125, 125, 125), 1)
         if self.ridge is not None and 'y' in self.ridge.keys():
             pts = np.vstack((self.ridge['y'], self.ridge['x'])).astype(np.int32).T
+            pts_obj = [Point(pt[0], pt[1]) for pt in pts]
+            [pt.draw(img, (100, 50, 150)) for pt in pts_obj]
             cv2.polylines(img, [pts],
-                          False, 200, 1)
+                          False, (50, 250, 100), 1)
+
+    def remove_ridge_pt(self, x, y):
+        pts_arr = np.vstack((self.ridge['x'], self.ridge['y']))
+        ix = self._find_closest(pts_arr.T, x, y)
+        self.ridge['x'] = np.delete(self.ridge['x'], ix)
+        self.ridge['y'] = np.delete(self.ridge['y'], ix)
 
     def remove_closest(self, x, y):
         ix = self.closest_point(x, y)
@@ -136,12 +144,16 @@ class ROI:
         inside = cv2.pointPolygonTest(self._pts_array(), (x, y), False)
         return inside > 0
 
+    @staticmethod
+    def _find_closest(pts_arr, x, y):
+        dist = np.squeeze(cdist(np.array([(x, y)]), pts_arr))
+        return np.argmin(dist)
+
     def closest_point(self, x, y):
         pts_arr = self._pts_array()
         if len(pts_arr.shape) != 2:
             return None
-        dist = np.squeeze(cdist(np.array([(x, y)]), pts_arr))
-        return np.argmin(dist)
+        return self._find_closest(pts_arr, x, y)
 
     def _pts_array(self):
         a = np.array([(pt.x, pt.y) for pt in self._pts], dtype=np.int32)
@@ -427,8 +439,11 @@ class DrawCiliumContour:
             self.c_roi = r
             self._roi_mode = True
         if event == cv2.EVENT_MBUTTONDOWN and self.c_roi is not None:
-            self.c_roi.remove_closest(x, y)
-            self.im_copy1 = self.im_copy2.copy()  # Reinitialize image
+            if self._roi_mode:
+                self.c_roi.remove_closest(x, y)
+                # self.im_copy1 = self.im_copy2.copy()  # Reinitialize image
+            elif self.manual_mode:
+                self.c_roi.remove_ridge_pt(x, y)
 
         self.update_rois()
         cv2.imshow(self.handler, self.im_copy1)
