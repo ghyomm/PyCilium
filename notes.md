@@ -56,15 +56,16 @@ my_roi.contour.draw_contour()
 
 ### Major:
   - [x] In manual ridge drawing mode : not possible to erase drawing or remove a point (points are not drawn anyway). Middle click is still operating on ROI contour in manual ridge drawing mode.
-  - [ ] After having finished to draw a ROI contour (but 'e' has not been pressed), pressing 'm' does not initiate manual mode right away. Looks like 'm' has to be pressed a secdon time.
+  - [x] After having finished to draw a ROI contour (but 'e' has not been pressed), pressing 'm' does not initiate manual mode right away. Looks like 'm' has to be pressed a second time.
     + In fact it works but the ridge is a line, so it needs two points to start showing up. Will fix 
 
 ### Minor:
   - [ ] ROI number is displayed next to first point, the user must be aware of this otherwise it may superimpose on the cilium.
-  - [ ] Left click inside an existing ROI does not seem to toggle the ROI drawing mode. Control of the ROI drawing mode comes back after some frenetic clicking, not sure how this happens.
+  - [x] Left click inside an existing ROI does not seem to toggle the ROI drawing mode. Control of the ROI drawing mode comes back after some frenetic clicking, not sure how this happens.
+    + I can't really replicate. It works when not in roi edit nor manual ridge mode
   - [x] Ridge line would be better in flashy green.
-  - [ ] Would it be a lot of work to add an option (new key stroke) to erase MAD threshold line and ridge line but not the ROI contour ? In case the user does not like what the automatic ridge calculation does and wants to use manual mode (and alternatively erasing a manually drawn ridge line) --> yes the lazy user could just erase the whole ROI and re-draw it.
-  - [ ] Save JSON in series folder (root.serie_name)
+  - [x] Would it be a lot of work to add an option (new key stroke) to erase MAD threshold line and ridge line but not the ROI contour ? In case the user does not like what the automatic ridge calculation does and wants to use manual mode (and alternatively erasing a manually drawn ridge line) --> yes the lazy user could just erase the whole ROI and re-draw it.
+  - [x] Save JSON in series folder (root.serie_name)
 
 
 

@@ -211,7 +211,7 @@ class ROI:
 
 
 class RoiCilium:
-    def __init__(self, full_stack, ch_ix: int, msg, img_path, ):
+    def __init__(self, full_stack, ch_ix: int, msg, img_path):
         self.contour = DrawCiliumContour(full_stack, ch_ix, msg, img_path)
 
 
@@ -220,7 +220,7 @@ class DrawCiliumContour:
         self.im = full_stack[..., ch_ix].max(0)  # Source image
         self.ch_cil = ch_ix
         self.img_path = Path(img_path)
-        self.json_path = self.img_path.parent / (self.img_path.stem + '.json')
+        self.json_path = self.img_path / (self.img_path.stem + '.json')
         self.full_stack = np.max(full_stack, 0)
         self.full_adj_stack = self.full_stack.copy()
         self.overlays = np.zeros(self.full_stack.shape[-1], dtype=np.bool)
@@ -321,6 +321,10 @@ class DrawCiliumContour:
                 self.c_mask = self.c_roi.get_mask(self.im_copy1)
                 self.segment_cilia()
                 self.update_rois()
+            elif key == ord('x') and self.c_roi is not None:
+                # Erase ridge of current ROI
+                self.c_roi.ridge = {}
+                self.c_roi.cilium = {}
 
     def _find_roi_under_mouse(self, x, y):
         """

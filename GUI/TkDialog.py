@@ -138,8 +138,9 @@ class Root(Tk):
             return
         cilia_stack = self.lif_file.get_serie_stack(self.series_indx)
         cilia_proj = cilia_stack[..., self.contains_cilia].max(0)
+        series_path = Path(self.fullpath).parent / self.series_folder_name
         my_roi = roi.RoiCilium(cilia_stack, self.contains_cilia,
-                               'Set threshold and draw bounding polygon', self.fullpath)
+                               'Set threshold and draw bounding polygon', series_path.as_posix())
         my_roi.contour.draw_contour()
 
     def exit(self):
@@ -200,7 +201,7 @@ class Root(Tk):
         self.series_indx = index  # Index of series (for later use)
         self.series_name = w.get(index)
         # Folder name corresponding to selected series:
-        folder_name = 'S{:0>2d}'.format(index + 1) + '_' + self.series_name
+        self.series_folder_name = 'S{:0>2d}'.format(index + 1) + '_' + self.series_name
         # Display number of channels in listbox
         self.nchans = self.md['Nchan'][index]  # Number of channels in series
         CHANNELS = ['Channel ' + str(x + 1) for x in range(self.nchans)]
@@ -238,7 +239,7 @@ class Root(Tk):
                                           bg=self.bg_col)
             self.subframe_dict[i].pack(side='left', fill='both', padx=10, pady=0, expand=True)
             # Grab and resize projection images:
-            im_file = os.path.join(os.path.split(self.fullpath)[0], folder_name,
+            im_file = os.path.join(os.path.split(self.fullpath)[0], self.series_folder_name,
                                    'z_proj_chan' + str(i + 1) + '.png')
             if os.path.exists(im_file):
                 im = Image.open(im_file)
