@@ -5,6 +5,7 @@
 + Left click inside an ROI to enter ROI drawing mode, for this ROI
 + Press `c` to start automatic analysis of the ROI
 + Press `m` to enter manual ridge line mode.
++ Press `r` to hide / display the ROI
 + Add extra channels by pressing `Ctrl-P`
 + Save a screenshot of the current display by pressing `Ctrl-S`
 + Press `x` to delete ridge line and cilium mask

@@ -228,6 +228,7 @@ class DrawCiliumContour:
         self._help = False
         self._help_screen = np.zeros(self.im.shape + (3, ), dtype=np.uint8)
         self._make_help_screen()
+        self._display_roi = True
         # self.pts = []  # Coordinates of bounding points
         self._cx = -1
         self._cy = -1
@@ -274,8 +275,9 @@ class DrawCiliumContour:
             if state:
                 self.im_copy1 += self.full_adj_stack[..., ix] / n_overlays
         self.im_copy1 = self.apply_color_map(self.im_copy1)
-        for ix, c_roi in enumerate(self.rois):
-            c_roi.draw(self.im_copy1, ix)
+        if self._display_roi:
+            for ix, c_roi in enumerate(self.rois):
+                c_roi.draw(self.im_copy1, ix)
         if self._help:
             alpha = .7
             self.im_copy1 = cv2.addWeighted(self._help_screen, alpha, self.im_copy1, 1-alpha, 0)
@@ -343,6 +345,8 @@ class DrawCiliumContour:
                 self.c_roi.cilium = {}
             elif key == ord('h'):
                 self._help = not self._help
+            elif key == ord('r'):
+                self._display_roi = not self._display_roi
 
     def _find_roi_under_mouse(self, x, y):
         """
