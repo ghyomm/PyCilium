@@ -225,6 +225,9 @@ class DrawCiliumContour:
         self.full_adj_stack = self.full_stack.copy()
         self.overlays = np.zeros(self.full_stack.shape[-1], dtype=np.bool)
         self.overlays[ch_ix] = True
+        self._help = False
+        self._help_screen = np.zeros(self.im.shape + (3, ), dtype=np.uint8)
+        self._make_help_screen()
         # self.pts = []  # Coordinates of bounding points
         self._cx = -1
         self._cy = -1
@@ -252,6 +255,16 @@ class DrawCiliumContour:
             if len(self.rois) > 0:
                 self.c_roi = self.rois[0]
 
+    def _make_help_screen(self):
+        font_face = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = .8
+        s, _ = cv2.getTextSize("+TEST", font_face, font_scale, 2)
+        print(s)
+        with open('roi/help.txt', 'r') as fp:
+            for ix, line in enumerate(fp):
+                cv2.putText(self._help_screen, line.strip(), (0, (ix+1)*s[1]*2),
+                            font_face, font_scale, (235, 235, 235), thickness=2)
+
     def update_rois(self):
         # Reinitialize image
         self.im_copy1 = np.zeros(self.im_copy1.shape[:2], dtype=np.float32)
@@ -263,6 +276,9 @@ class DrawCiliumContour:
         self.im_copy1 = self.apply_color_map(self.im_copy1)
         for ix, c_roi in enumerate(self.rois):
             c_roi.draw(self.im_copy1, ix)
+        if self._help:
+            alpha = .7
+            self.im_copy1 = cv2.addWeighted(self._help_screen, alpha, self.im_copy1, 1-alpha, 0)
         cv2.imshow(self.handler, self.im_copy1)
 
     def over_ch(self, state, ch_ix: int):
@@ -325,6 +341,8 @@ class DrawCiliumContour:
                 # Erase ridge of current ROI
                 self.c_roi.ridge = {}
                 self.c_roi.cilium = {}
+            elif key == ord('h'):
+                self._help = not self._help
 
     def _find_roi_under_mouse(self, x, y):
         """
@@ -367,6 +385,11 @@ class DrawCiliumContour:
     def exit(self):
         javabridge.detach()
         self.all_rois = [r.to_dict() for r in self.rois]
+        # Useful for testing mostly
+        if not self.json_path.parent.is_dir():
+            print('WARNING: Data not saved because folder does not exist')
+            cv2.destroyWindow(self.handler)
+            return
         with open(self.json_path, 'w') as jf:
             json.dump(self.all_rois, jf, indent=2)
         cv2.destroyWindow(self.handler)
