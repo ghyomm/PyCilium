@@ -87,34 +87,67 @@ This procedures creates a bunch of files (metadata) and folders (one per series,
 ```
 
 ### Step 2: working with projections images and OpenCV for drawing ROIs interactively.
-We now have all the info to start working on z projection images. The code below shows how to obtain the hyperstack of a series (a 4-dimensional stack containing 3D stacks for all channels).
 
-```python
-import bioformats as bf
-import numpy as np
-rdr = bf.ImageReader(root.fullpath)
-# Obtain hyperstack
-stack = []
-for z in range(root.md.SizeZ[root.series_indx]):  # Loop through z slices
-    im = rdr.read(z=z, series=root.series_indx, rescale=False)
-    stack.append(im)
-stack = np.array(stack)
+We now have all the info to start working on z projection images. 
+The hyperstack of a series (a 4-dimensional stack containing 3D stacks for all channels) is reduced to maximum projections for each channel.
+The projection with cilia, labeled in the first step, will be used to draw ROIs during this step.
+The OpenCV interface to do so can be started by pressing the 'OK' button in the TKinter window
+
+#### Usage:
++ Use the bottom trackbar to adjust contrast (*threshold*) for better visualization of cilia. This does not affect analysis.
++ Press `n` to start drawing a ROI using the mouse **left** click
++ Use mouse **middle** click to remove the point closest to the mouse pointer
++ Press `d` while the mouse pointer is **inside** a ROI to delete it
++ Press `e` to get out of the ROI drawing mode.
++ *Left* click inside an ROI to enter ROI drawing mode, for this ROI
++ Press `c` to start automatic analysis of the ROI (see below for details)
++ One can adjust the threshold used for cilium detection by moving the *k-MAD* slider at the bottom
++ Press `m` to enter manual ridge line mode. The left mouse click can now be used to draw a line at the center of the cilium
++ Add extra channels (the max-projections from other channels) by pressing `Ctrl-P` and then selecting which channel to add and adjusting its threshold.
++ Save a screenshot of the current display by pressing `Ctrl-S`
++ Press `q` to quit
+
+ROI number is automatically displayed next to the first point
+
+#### Extra details
+
+When quitting, the ROIs and their analysis results are saved into a JSON file in the same folder 
+as the original `.lif` file. 
+When loading the same `lif` file again, the previous analysis is restored.
+ 
+The JSON structure is the following:
+```json
+[
+  {
+    "id": "str, UUID", 
+    "points": [["roi_x0", "roi_y0"],["roi_x1", "roi_y1"]],
+    "closed": true,
+    "contour": [["x0", "y0"],["x1", "y1"]],
+    "k_mad": 5,
+    "cilium":{"x": [1, 2, 3], "y":  [1, 2, 3], "z":  [1, 2, 3]},
+    "ridge": {"x": [1, 2, 3], "y":  [1, 2, 3], "z":  [1, 2, 3], "length":  12.5}
+  }
+]
 ```
++ `z` means fluorescence level (either raw or spline estimated)
++ `cilium` contains information about the threshold structure, considered as the cilium
++ `ridge` contains information about the extracted ridge, which implies some smoothing and contains a length (in pixels) estimation
 
-The projection image is obtained as follows:
-```python
-# Compute z projection for channel containing cilia
-proj = np.amax(stack[:,:,:,root.contains_cilia],0)
-```
+The cilium is extracted using the `fit_cilium` function from `draw_roi.py`. 
+Briefly, the raw image is thresholded using median + k * MAD with k being user-adjusted.
+A rectangular bivariate spline, with smoothing, is fitted to the corresponding fluorescence signal over the rectangular bounding box of the non-zero pixels.
+This spline is then used to extract the ridge line (maxima). 
+An other spline with smoothing is fitted to those maxima, and fluorescence signal is estimated. This will be saved along side the maxima coordinates.
+Length of the ridge line is evaluated by approximating its integral using the traditional rectangle method.
 
-The next step is to display the projection image using OpenCV and use mouse events to draw a ROI:
+#### Possible improvements: 
++ Cleaning the MAD-thresholded image (median filter, keeping only the biggest element after contour finding...)
++ Adjustable smoothing level for the different splines.
++ Better placement of ROI number
++ Coloring of ROIs is not correct when reloading from file
 
-```python
-import roi
-my_roi = roi.RoiCilium(proj,'Set threshold and draw bounding polygon')  # Initialize class RoiCilium
-my_roi.contour.draw_contour()
-```
+The image below shows a cilium with the saturation level adjusted by the user (using a slide bar at the bottom of the window, not visible here; blue pixels are saturated). 
+The green polygon was drawn by the user (left click to draw a point).
 
-The image below shows a cilium with the saturation level adjusted by the user (using a slide bar at the bottom of the window, not visible here; blue pixels are saturated). The green polygon was drawn by the user (right click to draw a point). The point surrounded by a light blue circle is the one which will be removed if the user does a wheel click. Use the key "q" to quit.
 
 <img src="https://github.com/ghyomm/PyCilium/blob/master/pics/cilium.png" width="30%">

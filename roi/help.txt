@@ -1,0 +1,12 @@
++ Press `n` to start drawing a ROI using the mouse left click
++ Use mouse middle click to remove the point closest to the mouse pointer
++ Press `d` while the mouse pointer is inside a ROI to delete it
++ Press `e` to get out of the ROI drawing mode.
++ Left click inside an ROI to enter ROI drawing mode, for this ROI
++ Press `c` to start automatic analysis of the ROI
++ Press `m` to enter manual ridge line mode.
++ Press `r` to hide / display the ROI
++ Add extra channels by pressing `Ctrl-P`
++ Save a screenshot of the current display by pressing `Ctrl-S`
++ Press `x` to delete ridge line and cilium mask
++ Press `q` to quit
