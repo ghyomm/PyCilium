@@ -343,6 +343,7 @@ class DrawCiliumContour:
                 # Erase ridge of current ROI
                 self.c_roi.ridge = {}
                 self.c_roi.cilium = {}
+                self.c_roi.contour = np.array([])
             elif key == ord('h'):
                 self._help = not self._help
             elif key == ord('r'):
