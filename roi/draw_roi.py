@@ -10,6 +10,12 @@ from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 from functools import partial
 
 
+SAT_COLOR = (255, 155, 25)
+CONTOUR_COLOR = (125, 125, 125)
+RIDGE_PT_COLOR = (100, 50, 150)
+RIDGE_LINE_COLOR = (50, 250, 100)
+
+
 class Point:
 
     def __init__(self, x, y) -> None:
@@ -119,13 +125,13 @@ class ROI:
             cv2.line(img, (self._pts[-1].x, self._pts[-1].y), (self._pts[0].x, self._pts[0].y),
                      self._color, 1)
         if len(self.contour) > 0:
-            cv2.drawContours(img, [self.contour], 0, (125, 125, 125), 1)
+            cv2.drawContours(img, [self.contour], 0, CONTOUR_COLOR, 1)
         if self.ridge is not None and 'y' in self.ridge.keys():
             pts = np.vstack((self.ridge['y'], self.ridge['x'])).astype(np.int32).T
             pts_obj = [Point(pt[0], pt[1]) for pt in pts]
-            [pt.draw(img, (100, 50, 150)) for pt in pts_obj]
+            [pt.draw(img, RIDGE_PT_COLOR) for pt in pts_obj]
             cv2.polylines(img, [pts],
-                          False, (50, 250, 100), 1)
+                          False, RIDGE_LINE_COLOR, 1)
 
     def remove_ridge_pt(self, x, y):
         pts_arr = np.vstack((self.ridge['x'], self.ridge['y']))
@@ -269,12 +275,14 @@ class DrawCiliumContour:
     def update_rois(self):
         # Reinitialize image
         self.im_copy1 = np.zeros(self.im_copy1.shape[:2], dtype=np.float32)
-        self.full_adj_stack[..., self.ch_cil] = self.apply_th(self.im_copy2.copy(), self.th)
+        self.full_adj_stack[..., self.ch_cil], saturated = self.apply_th(self.im_copy2.copy(),
+                                                                         self.th)
         n_overlays = np.sum(self.overlays)
         for ix, state in enumerate(self.overlays):
             if state:
                 self.im_copy1 += self.full_adj_stack[..., ix] / n_overlays
         self.im_copy1 = self.apply_color_map(self.im_copy1)
+        self.im_copy1[saturated, ...] = SAT_COLOR
         if self._display_roi:
             for ix, c_roi in enumerate(self.rois):
                 c_roi.draw(self.im_copy1, ix)
@@ -287,7 +295,7 @@ class DrawCiliumContour:
         self.overlays[ch_ix] = state
 
     def adjust_th(self, event, ch: int):
-        img = self.apply_th(self.full_stack[..., ch].copy(), event)
+        img, _ = self.apply_th(self.full_stack[..., ch].copy(), event)
         self.full_adj_stack[..., ch] = img
         self.update_rois()
 
@@ -413,11 +421,11 @@ class DrawCiliumContour:
         self.th = cv2.getTrackbarPos('Threshold', self.handler)
         if self.th == 0:
             self.th = 1
-        th_im = self.apply_th(self.im.copy(), self.th)
+        # th_im, _ = self.apply_th(self.im.copy(), self.th)
         # self.im_copy1 = th_im
         # self.im_copy2 = th_im.copy()  # Keep copy without pts and lines
         # cv2.imshow(self.handler, self.im_copy1)
-        self.full_adj_stack[..., self.ch_cil] = th_im
+        # self.full_adj_stack[..., self.ch_cil] = th_im
         self.update_rois()
 
     @staticmethod
@@ -428,12 +436,12 @@ class DrawCiliumContour:
             bw = img.copy()
         ret, tmp1 = cv2.threshold(bw, th, 255, cv2.THRESH_TRUNC)
         img = (255 * (tmp1.astype('float32') / th)).astype('uint8')
-        ret, tmp2 = cv2.threshold(bw, 254, 255, cv2.THRESH_BINARY)
+        ret, tmp2 = cv2.threshold(img, 254, 255, cv2.THRESH_BINARY)
         sat = (tmp2 / 255).astype('uint8')  # Saturated pixels = 1
         # gi = np.where(sat == 1)  # Identify saturated pixels
         gi = sat == 1  # Identify saturated pixels
-        img[gi] = 1
-        return img
+        # img[gi] = 1
+        return img, gi
 
     @staticmethod
     def apply_color_map(img: np.ndarray):
