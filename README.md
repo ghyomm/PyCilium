@@ -1,6 +1,8 @@
 # PyCilium
 Python functions to analyze the length of cilia in confocal stacks.
 
+![alt text](https://github.com/ghyomm/PyCilium/blob/master/pics/PCL_repo_card.png)
+
 ## Rationale
 The idea is to provide a comfortable user interface for annotating z projection images and measure the length of cilia. ROI-related information should be saved in text files.
 
