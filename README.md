@@ -18,6 +18,17 @@ $ source pcl/bin/activate
 ```
 Then in the virtual environment, `pip3 install` the following packages: `opencv-python`, `wheel`, `jupyter`, `python-bioformats`, `pickle-mixin`, `numpy`, `pandas`, `Pillow` and `python-resize-image`.
 
+## Additional installation instructions
+
+In case the installation of python-bioformats fails, you might want to try (from https://github.com/CellProfiler/CellProfiler/wiki/Ubuntu-20.04):
+
+```
+$ sudo apt install -y make gcc build-essential libgtk-3-dev
+$ sudo apt-get install -y python3-pip openjdk-11-jdk-headless default-libmysqlclient-dev libnotify-dev libsdl2-dev
+$ export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+$ export PATH=$PATH:/home/ubuntu/.local/bin
+```
+
 ## Data organizarion
 
     DATA_CILIA (equivalent to workspace3/POC5_project/osteoblast)
@@ -90,7 +101,7 @@ This procedures creates a bunch of files (metadata) and folders (one per series,
 
 ### Step 2: working with projections images and OpenCV for drawing ROIs interactively.
 
-We now have all the info to start working on z projection images. 
+We now have all the info to start working on z projection images.
 The hyperstack of a series (a 4-dimensional stack containing 3D stacks for all channels) is reduced to maximum projections for each channel.
 The projection with cilia, labeled in the first step, will be used to draw ROIs during this step.
 The OpenCV interface to do so can be started by pressing the 'OK' button in the TKinter window
@@ -113,15 +124,15 @@ ROI number is automatically displayed next to the first point
 
 #### Extra details
 
-When quitting, the ROIs and their analysis results are saved into a JSON file in the same folder 
-as the original `.lif` file. 
+When quitting, the ROIs and their analysis results are saved into a JSON file in the same folder
+as the original `.lif` file.
 When loading the same `lif` file again, the previous analysis is restored.
- 
+
 The JSON structure is the following:
 ```json
 [
   {
-    "id": "str, UUID", 
+    "id": "str, UUID",
     "points": [["roi_x0", "roi_y0"],["roi_x1", "roi_y1"]],
     "closed": true,
     "contour": [["x0", "y0"],["x1", "y1"]],
@@ -135,20 +146,20 @@ The JSON structure is the following:
 + `cilium` contains information about the threshold structure, considered as the cilium
 + `ridge` contains information about the extracted ridge, which implies some smoothing and contains a length (in pixels) estimation
 
-The cilium is extracted using the `fit_cilium` function from `draw_roi.py`. 
+The cilium is extracted using the `fit_cilium` function from `draw_roi.py`.
 Briefly, the raw image is thresholded using median + k * MAD with k being user-adjusted.
 A rectangular bivariate spline, with smoothing, is fitted to the corresponding fluorescence signal over the rectangular bounding box of the non-zero pixels.
-This spline is then used to extract the ridge line (maxima). 
+This spline is then used to extract the ridge line (maxima).
 An other spline with smoothing is fitted to those maxima, and fluorescence signal is estimated. This will be saved along side the maxima coordinates.
 Length of the ridge line is evaluated by approximating its integral using the traditional rectangle method.
 
-#### Possible improvements: 
+#### Possible improvements:
 + Cleaning the MAD-thresholded image (median filter, keeping only the biggest element after contour finding...)
 + Adjustable smoothing level for the different splines.
 + Better placement of ROI number
 + Coloring of ROIs is not correct when reloading from file
 
-The image below shows a cilium with the saturation level adjusted by the user (using a slide bar at the bottom of the window, not visible here; blue pixels are saturated). 
+The image below shows a cilium with the saturation level adjusted by the user (using a slide bar at the bottom of the window, not visible here; blue pixels are saturated).
 The green polygon was drawn by the user (left click to draw a point).
 
 
